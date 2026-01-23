@@ -7,6 +7,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::PathBuf;
+use tauri::Manager;
 use std::env;
 use std::os::raw::c_char;
 use std::path::Path;
@@ -15,6 +18,7 @@ const API_BASE: &str = "https://api.bgm.tv";
 const SUBJECTS_PATH: &str = "/v0/subjects";
 const EPISODES_PATH: &str = "/v0/episodes";
 const DEFAULT_IMAGE: &str = "https://lain.bgm.tv/img/no_icon_subject.png";
+const TRACK_DB_FILE: &str = "watchlist.json";
 
 #[derive(Deserialize)]
 struct PagedSubject {
@@ -199,6 +203,35 @@ struct SubjectCharactersResponse {
   characters: Vec<CharacterLinkResponse>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TrackedSubject {
+  id: u32,
+  name: String,
+  name_cn: String,
+  image: String,
+  url: String,
+  watching: bool,
+  backlog: bool,
+  watched: bool,
+  date: String,
+  rating: Option<f64>,
+  summary: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SubjectBriefResponse {
+  id: u32,
+  name: String,
+  name_cn: String,
+  image: String,
+  date: String,
+  rating: Option<f64>,
+  summary: String,
+  url: String,
+}
+
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +259,42 @@ fn season_months(season: &str) -> Result<Vec<u32>, String> {
     "autumn" => Ok(vec![10, 11, 12]),
     _ => Err("invalid season".into()),
   }
+}
+
+fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+  let dir = app
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("无法获取数据目录: {e}"))?
+    .join("hanamirip-cn");
+  fs::create_dir_all(&dir).map_err(|e| format!("创建数据目录失败: {e}"))?;
+  Ok(dir.join(TRACK_DB_FILE))
+}
+
+fn load_tracked(app: &tauri::AppHandle) -> Result<HashMap<u32, TrackedSubject>, String> {
+  let path = db_path(app)?;
+  if !path.exists() {
+    return Ok(HashMap::new());
+  }
+  let content = fs::read_to_string(&path).map_err(|e| format!("读取追番数据失败: {e}"))?;
+  if content.trim().is_empty() {
+    return Ok(HashMap::new());
+  }
+  let parsed: Vec<TrackedSubject> = serde_json::from_str(&content)
+    .map_err(|e| format!("解析追番数据失败: {e}"))?;
+  let mut map = HashMap::new();
+  for item in parsed {
+    map.insert(item.id, item);
+  }
+  Ok(map)
+}
+
+fn persist_tracked(app: &tauri::AppHandle, data: &HashMap<u32, TrackedSubject>) -> Result<(), String> {
+  let path = db_path(app)?;
+  let list: Vec<_> = data.values().cloned().collect();
+  let payload = serde_json::to_string_pretty(&list)
+    .map_err(|e| format!("序列化追番数据失败: {e}"))?;
+  fs::write(&path, payload).map_err(|e| format!("写入追番数据失败: {e}"))
 }
 
 fn resolve_image(images: Option<Images>) -> String {
@@ -685,6 +754,36 @@ fn map_subject(subject: Subject) -> SeasonAnime {
   }
 }
 
+async fn fetch_subject_brief(id: u32) -> Result<SubjectBriefResponse, String> {
+  let client = reqwest::Client::builder()
+    .user_agent("HanamiRIP-CN/0.1")
+    .build()
+    .map_err(|e| e.to_string())?;
+
+  let response = client
+    .get(format!("{API_BASE}{SUBJECTS_PATH}/{id}"))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?;
+
+  if !response.status().is_success() {
+    return Err(format!("Bangumi API 请求失败: {}", response.status()));
+  }
+
+  let subject: Subject = response.json().await.map_err(|e| e.to_string())?;
+  let mapped = map_subject(subject);
+  Ok(SubjectBriefResponse {
+    id: mapped.id,
+    name: mapped.name,
+    name_cn: mapped.name_cn,
+    image: mapped.image,
+    date: mapped.date,
+    rating: mapped.rating,
+    summary: mapped.summary,
+    url: mapped.url,
+  })
+}
+
 async fn fetch_month_subjects(client: &Client, year: u32, month: u32) -> Result<Vec<SeasonAnime>, String> {
   let mut offset = 0u32;
   let limit = 50u32;
@@ -1020,6 +1119,29 @@ async fn get_subject_summary_cn(id: u32, summary: String) -> Result<SubjectSumma
 }
 
 #[tauri::command]
+async fn get_subject_brief(id: u32) -> Result<SubjectBriefResponse, String> {
+  fetch_subject_brief(id).await
+}
+
+#[tauri::command]
+fn list_tracked_subjects(app: tauri::AppHandle) -> Result<Vec<TrackedSubject>, String> {
+  let data = load_tracked(&app)?;
+  Ok(data.values().cloned().collect())
+}
+
+#[tauri::command]
+fn save_tracked_subject(app: tauri::AppHandle, subject: TrackedSubject) -> Result<Vec<TrackedSubject>, String> {
+  let mut data = load_tracked(&app)?;
+  if !subject.watching && !subject.backlog && !subject.watched {
+    data.remove(&subject.id);
+  } else {
+    data.insert(subject.id, subject);
+  }
+  persist_tracked(&app, &data)?;
+  Ok(data.values().cloned().collect())
+}
+
+#[tauri::command]
 async fn get_season_subjects(year: u32, season: String) -> Result<SeasonResponse, String> {
   let months = season_months(&season)?;
   let client = reqwest::Client::builder()
@@ -1057,7 +1179,10 @@ fn main() {
       get_subject_filters,
       get_subject_staff,
       get_subject_characters,
-      get_subject_summary_cn
+      get_subject_summary_cn,
+      get_subject_brief,
+      list_tracked_subjects,
+      save_tracked_subject
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

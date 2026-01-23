@@ -202,6 +202,49 @@ let progressTimer: number | undefined;
 let catchupTimer: number | undefined;
 const dataCache = new Map<string, SeasonResponse>();
 const queryToken = ref(0);
+type ItemStatus = { watching: boolean; backlog: boolean; watched: boolean };
+const statuses = ref<Record<number, ItemStatus>>({});
+type TrackedItem = MonthAnime & ItemStatus;
+const trackedItems = ref<TrackedItem[]>([]);
+const parseDateValue = (date?: string) => {
+  if (!date) return Number.POSITIVE_INFINITY;
+  const parsed = new Date(`${date}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
+};
+const sortByDate = (list: TrackedItem[]) =>
+  list
+    .slice()
+    .sort((a, b) => parseDateValue(a.date) - parseDateValue(b.date));
+
+const watchingList = computed(() => sortByDate(trackedItems.value.filter((item) => item.watching)));
+const backlogList = computed(() => sortByDate(trackedItems.value.filter((item) => item.backlog)));
+const finishedList = computed(() => sortByDate(trackedItems.value.filter((item) => item.watched)));
+const watchingByWeekday = computed(() => {
+  const groups = new Map<number | null, TrackedItem[]>();
+  watchingList.value.forEach((item) => {
+    const date = item.date;
+    if (!date) {
+      groups.set(null, [...(groups.get(null) || []), item]);
+      return;
+    }
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      groups.set(null, [...(groups.get(null) || []), item]);
+      return;
+    }
+    const day = parsed.getDay();
+    groups.set(day, [...(groups.get(day) || []), item]);
+  });
+  const order: Array<number | null> = [1, 2, 3, 4, 5, 6, 0, null];
+  return order
+    .map((key) => ({
+      key,
+      label: key === null ? "未知日期" : weekdayLabels[key],
+      items: groups.get(key) || [],
+    }))
+    .filter((group) => group.items.length);
+});
+type StatusKey = "watching" | "backlog" | "watched" | null;
 const formatMonth = (value: number) => String(value).padStart(2, "0");
 
 const monthFilter = ref<Array<number | string>>([]);
@@ -372,6 +415,13 @@ onMounted(async () => {
   if (height) {
     document.documentElement.style.setProperty("--query-panel-height", `${height}px`);
   }
+  try {
+    const saved = await invoke<TrackedItem[]>("list_tracked_subjects");
+    syncStatusesFromTracked(saved);
+  } catch (_) {
+    statuses.value = {};
+    trackedItems.value = [];
+  }
 });
 
 watch(monthFilterOptions, () => {
@@ -487,6 +537,66 @@ const clearProgressTimers = () => {
     window.clearInterval(catchupTimer);
     catchupTimer = undefined;
   }
+};
+
+const normalizeStatus = (state?: ItemStatus): ItemStatus => {
+  if (!state) return { watching: false, backlog: false, watched: false };
+  const keys: Array<keyof ItemStatus> = ["watched", "watching", "backlog"]; // 优先级：已看 > 追番 > 补番
+  const active = keys.find((key) => state[key]);
+  return {
+    watching: active === "watching",
+    backlog: active === "backlog",
+    watched: active === "watched",
+  };
+};
+
+const ensureStatus = (id: number): ItemStatus => {
+  if (!statuses.value[id]) {
+    statuses.value[id] = { watching: false, backlog: false, watched: false };
+  } else {
+    statuses.value[id] = normalizeStatus(statuses.value[id]);
+  }
+  return statuses.value[id];
+};
+
+const syncStatusesFromTracked = (items: TrackedItem[]) => {
+  const map: Record<number, ItemStatus> = {};
+  items.forEach((item) => {
+    map[item.id] = normalizeStatus({
+      watching: !!item.watching,
+      backlog: !!item.backlog,
+      watched: !!item.watched,
+    });
+  });
+  statuses.value = map;
+  trackedItems.value = items;
+};
+
+const persistStatusToDb = async (item: MonthAnime, nextStatus: ItemStatus) => {
+  if (!item.id) return;
+  const payload = {
+    id: item.id,
+    name: item.name,
+    nameCn: item.nameCn || "",
+    image: item.image,
+    url: item.url || `https://bgm.tv/subject/${item.id}`,
+    date: item.date || "",
+    rating: item.rating ?? null,
+    summary: item.summary || "",
+    watching: nextStatus.watching,
+    backlog: nextStatus.backlog,
+    watched: nextStatus.watched,
+  };
+  const saved = await invoke<TrackedItem[]>("save_tracked_subject", { subject: payload });
+  syncStatusesFromTracked(saved);
+};
+const setExclusiveStatus = async (item: MonthAnime, target: StatusKey) => {
+  if (!item.id) return;
+  const base: ItemStatus = { watching: false, backlog: false, watched: false };
+  if (target && base.hasOwnProperty(target)) {
+    (base as any)[target] = true;
+  }
+  await persistStatusToDb(item, base);
 };
 
 const cancelActiveQuery = () => {
@@ -669,6 +779,7 @@ const parseQueryKeywords = (value: string) => {
 
 const handleSelect = (item: MonthAnime) => {
   selected.value = item;
+  if (item.id) ensureStatus(item.id);
   originError.value = "";
   airedError.value = "";
   staffError.value = "";
@@ -805,6 +916,67 @@ const loadSummaryCn = async (item: MonthAnime) => {
     }
   }
 };
+
+const selectedStatus = computed(() => {
+  const id = selected.value?.id;
+  if (!id) return { watching: false, backlog: false, watched: false };
+  return ensureStatus(id);
+});
+
+const currentStatusKey = (status: ItemStatus): StatusKey => {
+  if (status.watched) return "watched";
+  if (status.watching) return "watching";
+  if (status.backlog) return "backlog";
+  return null;
+};
+
+const labelForAction = (active: StatusKey, target: StatusKey) => {
+  if (target === "watching") return active === "watching" ? "正在追番" : active ? "转为正在追番" : "加入正在追番";
+  if (target === "backlog") return active === "backlog" ? "补番计划" : active ? "转为补番计划" : "加入补番计划";
+  if (target === "watched") return active === "watched" ? "已完番剧" : active ? "转为已完番剧" : "标记已完番剧";
+  return "";
+};
+
+const updateTrackedItem = (id: number, patch: Partial<TrackedItem>) => {
+  trackedItems.value = trackedItems.value.map((item) =>
+    item.id === id ? { ...item, ...patch } : item
+  );
+};
+
+const refreshWatchingDetails = async () => {
+  if (!watchingList.value.length) return;
+  for (const item of watchingList.value) {
+    try {
+      const payload = await invoke<{
+        id: number;
+        name: string;
+        nameCn: string;
+        image: string;
+        date: string;
+        rating: number | null;
+        summary: string;
+        url: string;
+      }>("get_subject_brief", { id: item.id });
+      updateTrackedItem(item.id, {
+        name: payload.name,
+        nameCn: payload.nameCn,
+        image: payload.image,
+        date: payload.date,
+        rating: payload.rating,
+        summary: payload.summary,
+        url: payload.url,
+      });
+    } catch (_) {
+      // 静默失败，保持本地快照
+    }
+  }
+};
+
+watch(isWatchingPage, (active) => {
+  if (active) {
+    void refreshWatchingDetails();
+  }
+});
 </script>
 
 <template>
@@ -1035,6 +1207,32 @@ const loadSummaryCn = async (item: MonthAnime) => {
                     >
                       {{ selected.nameCn || selected.name }}
                     </a>
+                    <div class="detail-actions">
+                      <NButton
+                        size="tiny"
+                        :type="selectedStatus.watching ? 'primary' : 'default'"
+                        secondary
+                        @click="selected && setExclusiveStatus(selected, 'watching')"
+                      >
+                        {{ labelForAction(currentStatusKey(selectedStatus), 'watching') }}
+                      </NButton>
+                      <NButton
+                        size="tiny"
+                        :type="selectedStatus.backlog ? 'primary' : 'default'"
+                        secondary
+                        @click="selected && setExclusiveStatus(selected, 'backlog')"
+                      >
+                        {{ labelForAction(currentStatusKey(selectedStatus), 'backlog') }}
+                      </NButton>
+                      <NButton
+                        size="tiny"
+                        :type="selectedStatus.watched ? 'primary' : 'default'"
+                        secondary
+                        @click="selected && setExclusiveStatus(selected, 'watched')"
+                      >
+                        {{ labelForAction(currentStatusKey(selectedStatus), 'watched') }}
+                      </NButton>
+                    </div>
                     <div class="detail-info-list">
                       <div class="detail-info-row">
                         <span class="detail-label">原名</span>
@@ -1119,21 +1317,107 @@ const loadSummaryCn = async (item: MonthAnime) => {
         </section>
       </div>
 
-      <div v-else-if="isWatchingPage" class="app-body search-view">
-        <NCard title="正在追番" size="small" class="search-placeholder">
-          <p>该页面正在建设中，敬请期待。</p>
+      <div v-else-if="isWatchingPage" class="app-body list-view">
+        <NCard title="正在追番" size="small" class="watchlist-card">
+          <div v-if="watchingByWeekday.length" class="watchlist-section-list">
+            <div v-for="group in watchingByWeekday" :key="group.label" class="watchlist-section">
+              <div class="watchlist-section-title">{{ group.label }}</div>
+              <div class="watchlist-grid">
+                <div v-for="item in group.items" :key="item.id" class="watchlist-item">
+                  <div class="watchlist-thumb">
+                    <img :src="item.image" :alt="item.name" />
+                  </div>
+                  <div class="watchlist-body">
+                    <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                      {{ item.nameCn || item.name }}
+                    </a>
+                    <div class="watchlist-meta">
+                      <span class="meta-row">放送：{{ formatAirDate(item.date) }}</span>
+                      <span class="meta-row">评分：{{ formatRating(item.rating) }}</span>
+                    </div>
+                    <div class="watchlist-actions">
+                      <NButton size="tiny" type="primary" secondary disabled>
+                        正在追番
+                      </NButton>
+                      <NButton size="tiny" secondary @click="setExclusiveStatus(item, 'backlog')">
+                        转为补番计划
+                      </NButton>
+                      <NButton size="tiny" secondary @click="setExclusiveStatus(item, 'watched')">
+                        转为已完番剧
+                      </NButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="watchlist-empty">还没有正在追的番剧。</p>
         </NCard>
       </div>
 
-      <div v-else-if="isBacklogPage" class="app-body search-view">
-        <NCard title="补番计划" size="small" class="search-placeholder">
-          <p>该页面正在建设中，敬请期待。</p>
+      <div v-else-if="isBacklogPage" class="app-body list-view">
+        <NCard title="补番计划" size="small" class="watchlist-card">
+          <div v-if="backlogList.length" class="watchlist-grid">
+            <div v-for="item in backlogList" :key="item.id" class="watchlist-item">
+              <div class="watchlist-thumb">
+                <img :src="item.image" :alt="item.name" />
+              </div>
+              <div class="watchlist-body">
+                <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                  {{ item.nameCn || item.name }}
+                </a>
+                <div class="watchlist-meta">
+                  <span class="meta-row">放送：{{ formatAirDate(item.date) }}</span>
+                  <span class="meta-row">评分：{{ formatRating(item.rating) }}</span>
+                </div>
+                <div class="watchlist-actions">
+                  <NButton size="tiny" secondary disabled>
+                    补番计划
+                  </NButton>
+                  <NButton size="tiny" secondary disabled>
+                    转为正在追番
+                  </NButton>
+                  <NButton size="tiny" type="primary" secondary @click="setExclusiveStatus(item, 'watched')">
+                    转为已完番剧
+                  </NButton>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="watchlist-empty">补番计划为空。</p>
         </NCard>
       </div>
 
-      <div v-else-if="isFinishedPage" class="app-body search-view">
-        <NCard title="已完番剧" size="small" class="search-placeholder">
-          <p>该页面正在建设中，敬请期待。</p>
+      <div v-else-if="isFinishedPage" class="app-body list-view">
+        <NCard title="已完番剧" size="small" class="watchlist-card">
+          <div v-if="finishedList.length" class="watchlist-grid">
+            <div v-for="item in finishedList" :key="item.id" class="watchlist-item">
+              <div class="watchlist-thumb">
+                <img :src="item.image" :alt="item.name" />
+              </div>
+              <div class="watchlist-body">
+                <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                  {{ item.nameCn || item.name }}
+                </a>
+                <div class="watchlist-meta">
+                  <span class="meta-row">放送：{{ formatAirDate(item.date) }}</span>
+                  <span class="meta-row">评分：{{ formatRating(item.rating) }}</span>
+                </div>
+                <div class="watchlist-actions">
+                  <NButton size="tiny" secondary disabled>
+                    转为正在追番
+                  </NButton>
+                  <NButton size="tiny" secondary disabled>
+                    转为补番计划
+                  </NButton>
+                  <NButton size="tiny" type="primary" secondary @click="setExclusiveStatus(item, null)">
+                    变为未观看
+                  </NButton>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="watchlist-empty">还没有标记已看的番剧。</p>
         </NCard>
       </div>
 
