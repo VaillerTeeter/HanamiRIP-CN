@@ -16,11 +16,24 @@
         "width": 1360,
         "height": 820,
         "resizable": false,
-        "maximizable": false
+        "maximizable": false,
+        "decorations": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "window-controls",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "core:window:allow-close",
+            "core:window:allow-minimize",
+            "core:window:allow-start-dragging"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

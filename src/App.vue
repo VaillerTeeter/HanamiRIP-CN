@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, h, nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   NButton,
   NCard,
@@ -70,6 +71,27 @@ interface SeasonResponse {
 const isDark = ref(false);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 
+type PageKey = "query" | "watching" | "backlog" | "finished" | "search";
+const activePage = ref<PageKey>("query");
+const isQueryPage = computed(() => activePage.value === "query");
+const isWatchingPage = computed(() => activePage.value === "watching");
+const isBacklogPage = computed(() => activePage.value === "backlog");
+const isFinishedPage = computed(() => activePage.value === "finished");
+const isSearchPage = computed(() => activePage.value === "search");
+const switchPage = (page: PageKey) => {
+  activePage.value = page;
+};
+
+const appWindow = getCurrentWindow();
+
+const handleMinimize = async () => {
+  await appWindow.minimize();
+};
+
+const handleClose = async () => {
+  await appWindow.close();
+};
+
 const currentMonth = new Date().getMonth() + 1;
 const getSeasonStartMonth = (value: number) => {
   if (value >= 1 && value <= 3) return 1;
@@ -120,6 +142,7 @@ const resultFetchedAt = ref("");
 const errorMessage = ref("");
 const hasQueried = ref(false);
 const progress = ref(0);
+const progressStartAt = ref<number | null>(null);
 const selected = ref<MonthAnime | null>(null);
 const originLoadingId = ref<number | null>(null);
 const originError = ref("");
@@ -176,7 +199,9 @@ const preloadImages = (items: MonthAnime[], timeoutMs = 5000) => {
 };
 const showResults = computed(() => hasQueried.value && !loading.value && progress.value >= 100);
 let progressTimer: number | undefined;
+let catchupTimer: number | undefined;
 const dataCache = new Map<string, SeasonResponse>();
+const queryToken = ref(0);
 const formatMonth = (value: number) => String(value).padStart(2, "0");
 
 const monthFilter = ref<Array<number | string>>([]);
@@ -449,23 +474,86 @@ const loadSeasonData = async (yearValue: number, seasonMonth: number) => {
   return payload;
 };
 
-const startProgress = () => {
+const MIN_PROGRESS_DURATION_MS = 100_000; // 至少 100 秒匀速到 99%
+const CATCHUP_DURATION_MS = 5_000; // 提前完成时，用 5 秒冲到 100%
+const MAX_PROGRESS_BEFORE_FINISH = 99;
+
+const clearProgressTimers = () => {
+  if (progressTimer) {
+    window.clearInterval(progressTimer);
+    progressTimer = undefined;
+  }
+  if (catchupTimer) {
+    window.clearInterval(catchupTimer);
+    catchupTimer = undefined;
+  }
+};
+
+const cancelActiveQuery = () => {
+  // 失效当前查询 token，后续异步结果将被丢弃
+  queryToken.value += 1;
+  loading.value = false;
+  hasQueried.value = false;
+  clearProgressTimers();
   progress.value = 0;
-  if (progressTimer) window.clearInterval(progressTimer);
+};
+
+const startProgress = () => {
+  clearProgressTimers();
+  progress.value = 0;
+  progressStartAt.value = Date.now();
+  // 匀速推进到 99%，用时间计算避免累加误差
   progressTimer = window.setInterval(() => {
-    if (progress.value < 90) {
-      progress.value += 5;
+    const start = progressStartAt.value;
+    if (!start) return;
+    const elapsed = Date.now() - start;
+    const target = Math.min(
+      MAX_PROGRESS_BEFORE_FINISH,
+      Math.floor((elapsed / MIN_PROGRESS_DURATION_MS) * MAX_PROGRESS_BEFORE_FINISH)
+    );
+    if (target > progress.value) {
+      progress.value = target;
+    }
+    // 到达 99% 后维持在 99%，不用继续跑定时器
+    if (target >= MAX_PROGRESS_BEFORE_FINISH) {
+      clearProgressTimers();
+      progressTimer = window.setInterval(() => {
+        progress.value = MAX_PROGRESS_BEFORE_FINISH; // 维持 99%，直到查询完成
+      }, 1000);
     }
   }, 120);
 };
 
-const finishProgress = () => {
-  if (progressTimer) window.clearInterval(progressTimer);
-  progress.value = 100;
+const finishProgress = async () => {
+  const startedAt = progressStartAt.value;
+  clearProgressTimers();
+  if (!startedAt) {
+    progress.value = 100;
+    return;
+  }
+  const elapsed = Date.now() - startedAt;
+
+  if (elapsed >= MIN_PROGRESS_DURATION_MS) {
+    progress.value = 100;
+    return;
+  }
+
+  // 还没到 100s，启动 5s 的冲刺动画
+  const startValue = progress.value;
+  const sprintStart = Date.now();
+  catchupTimer = window.setInterval(() => {
+    const ratio = Math.min(1, (Date.now() - sprintStart) / CATCHUP_DURATION_MS);
+    const target = Math.round(startValue + (100 - startValue) * ratio);
+    progress.value = target;
+    if (ratio >= 1) {
+      clearProgressTimers();
+    }
+  }, 50);
 };
 
 const handleQuery = async () => {
   if (!year.value || !month.value) return;
+  const token = ++queryToken.value;
   loading.value = true;
   errorMessage.value = "";
   hasQueried.value = true;
@@ -477,6 +565,7 @@ const handleQuery = async () => {
   startProgress();
   try {
     const data = await loadSeasonData(year.value, month.value);
+    if (token !== queryToken.value) return;
     const merged = data.months
       .flatMap((item) => item.list.map((entry) => ({ ...entry, month: item.month })))
       .sort((a, b) => {
@@ -484,6 +573,7 @@ const handleQuery = async () => {
         if (monthDiff !== 0) return monthDiff;
         return (a.date || "").localeCompare(b.date || "");
       });
+    if (token !== queryToken.value) return;
     results.value = merged;
     resultUrl.value = data.source;
     resultFetchedAt.value = data.fetchedAt;
@@ -496,12 +586,22 @@ const handleQuery = async () => {
       await loadFiltersForResults(merged);
     }
   } catch (error) {
-    errorMessage.value = String(error);
+    if (token === queryToken.value) {
+      errorMessage.value = String(error);
+    }
   } finally {
-    loading.value = false;
-    finishProgress();
+    if (token === queryToken.value) {
+      loading.value = false;
+      await finishProgress();
+    }
   }
 };
+
+watch([year, month], () => {
+  if (loading.value) {
+    cancelActiveQuery();
+  }
+});
 
 const loadFiltersForResults = async (items: MonthAnime[]) => {
   filterLoading.value = true;
@@ -710,7 +810,78 @@ const loadSummaryCn = async (item: MonthAnime) => {
 <template>
   <NConfigProvider :theme="theme">
     <div class="app-shell">
-      <div class="app-body" :class="{ 'results-view': hasQueried }">
+      <header class="app-titlebar" data-tauri-drag-region>
+        <div class="titlebar-drag-region" data-tauri-drag-region>
+          <div class="titlebar-left" data-tauri-drag-region>
+            <span class="app-title">HanamiRIP</span>
+            <span class="app-subtitle">番剧助手</span>
+          </div>
+          <div class="titlebar-nav" data-tauri-drag-region>
+            <NButton
+              secondary
+              :type="isQueryPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('query')"
+            >
+              季度查询
+            </NButton>
+            <NButton
+              secondary
+              :type="isWatchingPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('watching')"
+            >
+              正在追番
+            </NButton>
+            <NButton
+              secondary
+              :type="isBacklogPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('backlog')"
+            >
+              补番计划
+            </NButton>
+            <NButton
+              secondary
+              :type="isFinishedPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('finished')"
+            >
+              已完番剧
+            </NButton>
+            <NButton
+              secondary
+              :type="isSearchPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('search')"
+            >
+              搜索资源
+            </NButton>
+          </div>
+        </div>
+        <div class="titlebar-actions" aria-label="window actions" data-tauri-drag-region="false">
+          <button
+            class="titlebar-control"
+            type="button"
+            aria-label="最小化"
+            data-tauri-drag-region="false"
+            @click="handleMinimize"
+          >
+            <span class="titlebar-icon">−</span>
+          </button>
+          <button
+            class="titlebar-control titlebar-close"
+            type="button"
+            aria-label="关闭"
+            data-tauri-drag-region="false"
+            @click="handleClose"
+          >
+            <span class="titlebar-icon">×</span>
+          </button>
+        </div>
+      </header>
+
+      <div v-if="isQueryPage" class="app-body" :class="{ 'results-view': hasQueried }">
         <section class="query-summary-row">
           <section ref="queryPanelRef" class="query-panel">
             <NCard title="选择查询条件" size="small">
@@ -946,6 +1117,30 @@ const loadSummaryCn = async (item: MonthAnime) => {
             </div>
           </div>
         </section>
+      </div>
+
+      <div v-else-if="isWatchingPage" class="app-body search-view">
+        <NCard title="正在追番" size="small" class="search-placeholder">
+          <p>该页面正在建设中，敬请期待。</p>
+        </NCard>
+      </div>
+
+      <div v-else-if="isBacklogPage" class="app-body search-view">
+        <NCard title="补番计划" size="small" class="search-placeholder">
+          <p>该页面正在建设中，敬请期待。</p>
+        </NCard>
+      </div>
+
+      <div v-else-if="isFinishedPage" class="app-body search-view">
+        <NCard title="已完番剧" size="small" class="search-placeholder">
+          <p>该页面正在建设中，敬请期待。</p>
+        </NCard>
+      </div>
+
+      <div v-else class="app-body search-view">
+        <NCard title="搜索资源" size="small" class="search-placeholder">
+          <p>搜索资源页面正在建设中，敬请期待。</p>
+        </NCard>
       </div>
     </div>
     <NModal v-model:show="showStaffModal" preset="card" title="工作人员" size="small">

@@ -26,6 +26,107 @@ body {
   min-height: 100vh;
 }
 
+.app-titlebar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 4px 8px;
+  background: #e6e6e6;
+  box-shadow: 0 1px 4px rgba(31, 41, 55, 0.12);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  -webkit-app-region: drag;
+  user-select: none;
+  min-height: 32px;
+}
+
+.titlebar-drag-region {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #1f2937;
+  min-width: 0;
+}
+
+.app-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.app-subtitle {
+  font-weight: 500;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.titlebar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-nav * {
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-actions button,
+.titlebar-actions .titlebar-control {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.titlebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-actions * {
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-control {
+  width: 44px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #111827;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.titlebar-control:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.titlebar-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.titlebar-icon {
+  line-height: 1;
+  font-weight: 600;
+  font-family: "Segoe UI", "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 
 .app-body {
   flex: 1;
@@ -36,6 +137,22 @@ body {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+.search-view {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 24px;
+}
+
+.search-placeholder {
+  width: 100%;
+  max-width: 720px;
+}
+
+.titlebar-nav .n-button,
+.titlebar-actions .n-button {
+  min-width: 96px;
 }
 
 .results-view {
