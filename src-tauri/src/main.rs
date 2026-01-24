@@ -163,6 +163,7 @@ struct SubjectOriginResponse {
 struct SubjectAiredResponse {
   id: u32,
   aired_count: u32,
+  total_count: u32,
 }
 
 #[derive(Serialize, Clone)]
@@ -217,6 +218,10 @@ struct TrackedSubject {
   date: String,
   rating: Option<f64>,
   summary: String,
+  #[serde(default)]
+  aired_count: Option<u32>,
+  #[serde(default)]
+  total_count: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -855,6 +860,7 @@ async fn get_subject_aired_count(id: u32) -> Result<SubjectAiredResponse, String
   let mut offset = 0u32;
   let limit = 50u32;
   let mut aired_count = 0u32;
+  let mut total_count = 0u32;
   let today = Utc::now().date_naive();
 
   loop {
@@ -874,6 +880,10 @@ async fn get_subject_aired_count(id: u32) -> Result<SubjectAiredResponse, String
     }
 
     let payload: EpisodePage = response.json().await.map_err(|e| e.to_string())?;
+    if total_count == 0 {
+      total_count = payload.total;
+    }
+
     for episode in payload.data.iter() {
       if is_aired(episode, today) {
         aired_count += 1;
@@ -890,7 +900,11 @@ async fn get_subject_aired_count(id: u32) -> Result<SubjectAiredResponse, String
     }
   }
 
-  Ok(SubjectAiredResponse { id, aired_count })
+  Ok(SubjectAiredResponse {
+    id,
+    aired_count,
+    total_count,
+  })
 }
 
 #[tauri::command]

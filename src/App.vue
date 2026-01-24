@@ -21,6 +21,7 @@ interface MonthAnime {
   alias?: string;
   origin?: string;
   airedCount?: number;
+  totalCount?: number;
   summaryCn?: string;
   summaryTranslated?: boolean;
   summaryTranslateFailed?: boolean;
@@ -492,6 +493,8 @@ onMounted(async () => {
   try {
     const saved = await invoke<TrackedItem[]>("list_tracked_subjects");
     syncStatusesFromTracked(saved);
+    // 启动时后台刷新正在追番的条目信息与集数，并落盘缓存
+    void refreshWatchingDetails({ persist: true });
   } catch (_) {
     statuses.value = {};
     trackedItems.value = [];
@@ -657,6 +660,8 @@ const persistStatusToDb = async (item: MonthAnime, nextStatus: ItemStatus) => {
     date: item.date || "",
     rating: item.rating ?? null,
     summary: item.summary || "",
+    airedCount: item.airedCount ?? 0,
+    totalCount: item.totalCount ?? 0,
     watching: nextStatus.watching,
     backlog: nextStatus.backlog,
     watched: nextStatus.watched,
@@ -898,13 +903,18 @@ const loadAiredCount = async (item: MonthAnime) => {
   airedLoadingId.value = item.id;
   airedError.value = "";
   try {
-    const payload = await invoke<{ id: number; airedCount?: number | null }>("get_subject_aired_count", {
-      id: item.id,
-    });
+    const payload = await invoke<{ id: number; airedCount?: number | null; totalCount?: number | null }>(
+      "get_subject_aired_count",
+      {
+        id: item.id,
+      }
+    );
     item.airedCount = payload.airedCount ?? 0;
+    item.totalCount = payload.totalCount ?? 0;
   } catch (error) {
     airedError.value = String(error);
     item.airedCount = 0;
+    item.totalCount = 0;
   } finally {
     if (airedLoadingId.value === item.id) {
       airedLoadingId.value = null;
@@ -1017,32 +1027,73 @@ const updateTrackedItem = (id: number, patch: Partial<TrackedItem>) => {
   );
 };
 
-const refreshWatchingDetails = async () => {
-  if (!watchingList.value.length) return;
-  for (const item of watchingList.value) {
-    try {
-      const payload = await invoke<{
-        id: number;
-        name: string;
-        nameCn: string;
-        image: string;
-        date: string;
-        rating: number | null;
-        summary: string;
-        url: string;
-      }>("get_subject_brief", { id: item.id });
-      updateTrackedItem(item.id, {
-        name: payload.name,
-        nameCn: payload.nameCn,
-        image: payload.image,
-        date: payload.date,
-        rating: payload.rating,
-        summary: payload.summary,
-        url: payload.url,
-      });
-    } catch (_) {
-      // 静默失败，保持本地快照
+const CONCURRENT_REFRESH_LIMIT = 6;
+
+const refreshWatchingDetails = async (options: { persist?: boolean } = {}) => {
+  const queue = [...watchingList.value];
+  if (!queue.length) return;
+  const updated: TrackedItem[] = [];
+
+  const worker = async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item) continue;
+      try {
+        const payload = await invoke<{
+          id: number;
+          name: string;
+          nameCn: string;
+          image: string;
+          date: string;
+          rating: number | null;
+          summary: string;
+          url: string;
+        }>("get_subject_brief", { id: item.id });
+
+        const count = await invoke<{ id: number; airedCount?: number | null; totalCount?: number | null }>(
+          "get_subject_aired_count",
+          { id: item.id }
+        );
+
+        const patch: Partial<TrackedItem> = {
+          name: payload.name,
+          nameCn: payload.nameCn,
+          image: payload.image,
+          date: payload.date,
+          rating: payload.rating,
+          summary: payload.summary,
+          url: payload.url,
+          airedCount: count.airedCount ?? item.airedCount ?? 0,
+          totalCount: count.totalCount ?? item.totalCount ?? 0,
+        };
+
+        updateTrackedItem(item.id, patch);
+        const merged = { ...item, ...patch } as TrackedItem;
+        updated.push(merged);
+      } catch (_) {
+        // 静默失败，保持本地快照
+      }
     }
+  };
+
+  const concurrency = Math.min(CONCURRENT_REFRESH_LIMIT, queue.length);
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  if (options.persist && updated.length) {
+    // 持久化最新的集数快照，防止下次启动重复等待
+    const persistQueue = [...updated];
+    const persistWorker = async () => {
+      while (persistQueue.length) {
+        const item = persistQueue.shift();
+        if (!item) continue;
+        try {
+          await invoke<TrackedItem[]>("save_tracked_subject", { subject: item });
+        } catch (_) {
+          // 忽略写入失败，保持内存快照
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, persistQueue.length || 1) }, () => persistWorker()));
   }
 };
 
@@ -1420,6 +1471,24 @@ watch(activePage, (next, prev) => {
                     <div class="watchlist-meta">
                       <span class="meta-row">放送：{{ formatAirDate(item.date) }}</span>
                       <span class="meta-row">评分：{{ formatRating(item.rating) }}</span>
+                    </div>
+                    <div v-if="item.totalCount" class="episode-strip">
+                      <div class="episode-strip-header">
+                        <span class="episode-strip-label">章节列表</span>
+                        <span class="episode-strip-summary">
+                          共 {{ item.totalCount }} 集 · 已播 {{ item.airedCount ?? 0 }} 集
+                        </span>
+                      </div>
+                      <div class="episode-strip-grid">
+                        <span
+                          v-for="n in item.totalCount"
+                          :key="n"
+                          class="episode-pill"
+                          :class="{ active: (item.airedCount ?? 0) >= n }"
+                        >
+                          {{ String(n).padStart(2, '0') }}
+                        </span>
+                      </div>
                     </div>
                     <div class="watchlist-actions">
                       <NButton size="tiny" type="primary" secondary disabled>
