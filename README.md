@@ -25,6 +25,7 @@
 - 系统依赖（GTK/WebKit 等，脚本会安装）：`build-essential`、`pkg-config`、`libgtk-3-dev`、`libwebkit2gtk-4.1-dev`、`librsvg2-dev`、`libssl-dev`、`curl`、`ca-certificates`
 - Node.js 24 + Yarn（通过 corepack 管理）
 - Rust 工具链（stable）
+- 字体：已内置 Noto Sans SC/JP/KR/TC（400/600），位于 [src/assets/fonts](src/assets/fonts)，无需联网获取 Google Fonts
 
 一键安装（会安装系统依赖、Node 24、Yarn、Rust 并安装项目依赖）：
 

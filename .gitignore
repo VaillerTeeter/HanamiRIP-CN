@@ -1,7 +1,5 @@
 node_modules/
-# dist/
 src-tauri/target/
 src-tauri/gen/schemas/
-proxy-loader.cjs
 src-tauri/baidu_verify/target/*
 src-tauri/baidu_verify/libbaidu_verify.so
