@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, onMounted, ref, watch } from "vue";
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -150,6 +150,8 @@ const airedLoadingId = ref<number | null>(null);
 const airedError = ref("");
 const showStaffModal = ref(false);
 const queryPanelRef = ref<HTMLElement | null>(null);
+const resultListRef = ref<HTMLElement | null>(null);
+const listItemRefs = ref<Record<number, HTMLElement | null>>({});
 const staffLoadingId = ref<number | null>(null);
 const staffError = ref("");
 const staffCache = ref<Record<number, StaffGroup[]>>({});
@@ -202,6 +204,78 @@ let progressTimer: number | undefined;
 let catchupTimer: number | undefined;
 const dataCache = new Map<string, SeasonResponse>();
 const queryToken = ref(0);
+const detailVisible = computed(() => showResults.value && !!selected.value);
+const INACTIVITY_SCROLL_DELAY_MS = 5000;
+let listMouseLeaveTimer: number | undefined;
+
+const setListItemRef = (item: MonthAnime, el: HTMLElement | null) => {
+  if (!item.id) return;
+  if (el) {
+    listItemRefs.value[item.id] = el;
+  } else {
+    delete listItemRefs.value[item.id];
+  }
+};
+
+const clearListMouseLeaveTimer = () => {
+  if (listMouseLeaveTimer) {
+    window.clearTimeout(listMouseLeaveTimer);
+    listMouseLeaveTimer = undefined;
+  }
+};
+
+const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
+  let node: HTMLElement | null = el?.parentElement || null;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+};
+
+const scrollToSelectedItem = async (behavior: ScrollBehavior = "smooth") => {
+  if (!detailVisible.value) return;
+  const id = selected.value?.id;
+  if (!id) return;
+  await nextTick();
+  const target = listItemRefs.value[id];
+  if (!target) return;
+
+  const container = findScrollParent(target) || resultListRef.value;
+  if (container) {
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const targetCenter = targetRect.top - containerRect.top + container.scrollTop + targetRect.height / 2;
+    const nextScrollTop = targetCenter - container.clientHeight / 2;
+    const maxScrollTop = container.scrollHeight - container.clientHeight;
+    const clamped = Math.max(0, Math.min(nextScrollTop, maxScrollTop));
+    container.scrollTo({ top: clamped, behavior });
+    return;
+  }
+
+  // 兜底：若未找到容器引用，退回浏览器默认行为
+  target.scrollIntoView({ behavior, block: "center", inline: "center" });
+};
+
+const handleListMouseEnter = () => {
+  clearListMouseLeaveTimer();
+};
+
+const handleListMouseLeave = () => {
+  if (!detailVisible.value) return;
+  clearListMouseLeaveTimer();
+  listMouseLeaveTimer = window.setTimeout(() => {
+    void scrollToSelectedItem();
+  }, INACTIVITY_SCROLL_DELAY_MS);
+};
+
+onBeforeUnmount(() => {
+  clearListMouseLeaveTimer();
+});
 type ItemStatus = { watching: boolean; backlog: boolean; watched: boolean };
 const statuses = ref<Record<number, ItemStatus>>({});
 type TrackedItem = MonthAnime & ItemStatus;
@@ -977,6 +1051,12 @@ watch(isWatchingPage, (active) => {
     void refreshWatchingDetails();
   }
 });
+
+watch(activePage, (next, prev) => {
+  if (next === "query" && prev && prev !== "query") {
+    void scrollToSelectedItem();
+  }
+});
 </script>
 
 <template>
@@ -1173,13 +1253,19 @@ watch(isWatchingPage, (active) => {
           <div class="result-content">
             <div class="result-layout" v-if="filteredResults.length">
               <NCard title="条目列表" size="small" class="result-list">
-                <div class="result-list-grid">
+                <div
+                  ref="resultListRef"
+                  class="result-list-grid"
+                  @mouseenter="handleListMouseEnter"
+                  @mouseleave="handleListMouseLeave"
+                >
                   <div
                     v-for="item in filteredResults"
                     :key="item.id ?? item.name"
                     class="result-list-item"
                     role="button"
                     tabindex="0"
+                    :ref="(el) => setListItemRef(item, el as HTMLElement | null)"
                     @click="handleSelect(item)"
                     @keydown.enter.prevent="handleSelect(item)"
                     @keydown.space.prevent="handleSelect(item)"
