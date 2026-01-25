@@ -204,6 +204,13 @@ struct SubjectCharactersResponse {
   characters: Vec<CharacterLinkResponse>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SubjectAliasesResponse {
+  id: u32,
+  aliases: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct TrackedSubject {
@@ -218,6 +225,8 @@ struct TrackedSubject {
   date: String,
   rating: Option<f64>,
   summary: String,
+  #[serde(default)]
+  aliases: Option<Vec<String>>, // 英文名/罗马音等别名列表
   #[serde(default)]
   aired_count: Option<u32>,
   #[serde(default)]
@@ -491,6 +500,25 @@ fn extract_origin(infobox: Option<Vec<InfoboxItem>>) -> Option<String> {
     }
   }
   None
+}
+
+fn extract_aliases(infobox: Option<Vec<InfoboxItem>>) -> Vec<String> {
+  let mut output = Vec::new();
+  let items = match infobox { Some(items) => items, None => return output };
+  for item in items {
+    let key = item.key.as_str();
+    // 兼容多种可能的别名字段
+    let is_alias_key = key.contains("别名")
+      || key.contains("又名")
+      || key.contains("英文")
+      || key.contains("罗马")
+      || key.eq_ignore_ascii_case("romaji")
+      || key.eq_ignore_ascii_case("english");
+    if !is_alias_key { continue; }
+    let values = extract_infobox_values(&item.value);
+    for v in values { output.push(v); }
+  }
+  dedupe_terms(output)
 }
 
 fn parse_airdate(value: &Option<String>) -> Option<NaiveDate> {
@@ -1029,6 +1057,28 @@ async fn get_subject_filters(id: u32) -> Result<SubjectFiltersResponse, String> 
 }
 
 #[tauri::command]
+async fn get_subject_aliases(id: u32) -> Result<SubjectAliasesResponse, String> {
+  let client = reqwest::Client::builder()
+    .user_agent("HanamiRIP-CN/0.1")
+    .build()
+    .map_err(|e| e.to_string())?;
+
+  let response = client
+    .get(format!("{API_BASE}{SUBJECTS_PATH}/{id}"))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?;
+
+  if !response.status().is_success() {
+    return Err(format!("Bangumi API 请求失败: {}", response.status()));
+  }
+
+  let payload: SubjectDetail = response.json().await.map_err(|e| e.to_string())?;
+  let aliases = extract_aliases(payload.infobox);
+  Ok(SubjectAliasesResponse { id, aliases })
+}
+
+#[tauri::command]
 async fn get_subject_staff(id: u32) -> Result<SubjectStaffResponse, String> {
   let client = reqwest::Client::builder()
     .user_agent("HanamiRIP-CN/0.1")
@@ -1195,6 +1245,7 @@ fn main() {
       get_subject_characters,
       get_subject_summary_cn,
       get_subject_brief,
+      get_subject_aliases,
       list_tracked_subjects,
       save_tracked_subject
     ])

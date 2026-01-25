@@ -5,6 +5,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   NButton,
   NCard,
+  NCheckbox,
+  NCheckboxGroup,
   NConfigProvider,
   NInput,
   NModal,
@@ -321,6 +323,153 @@ const watchingByWeekday = computed(() => {
 });
 type StatusKey = "watching" | "backlog" | "watched" | null;
 const formatMonth = (value: number) => String(value).padStart(2, "0");
+
+// --- 搜索资源 ---
+type LogicOp = "and" | "or" | "not";
+type SearchTerm = { value: string; op: LogicOp; source: "preset" | "custom" | "tracked" };
+const NYAA_BASE = "https://nyaa.vaciller.top/?f=0&c=0_0&q=";
+const presetPhrases = ["SubsPlease", "LoliHouse", "内封", "外挂"];
+const logicOptions: { label: string; value: LogicOp }[] = [
+  { label: "与", value: "and" },
+  { label: "或", value: "or" },
+  { label: "非", value: "not" },
+];
+const activeLogic = ref<LogicOp>("and");
+const searchTerms = ref<SearchTerm[]>([]);
+const customSearchInput = ref("");
+const trackedSelection = ref<number | null>(null);
+const aliasModalVisible = ref(false);
+const aliasLoading = ref(false);
+const aliasOptions = ref<string[]>([]);
+const aliasSelected = ref<string[]>([]);
+const pendingTrackedId = ref<number | null>(null);
+const pendingTrackedName = ref("");
+
+const trackedOptions = computed(() =>
+  trackedItems.value.map((item) => ({
+    label: item.nameCn || item.name,
+    value: item.id,
+  }))
+);
+
+const addSearchTerm = (value: string, source: SearchTerm["source"], op?: LogicOp) => {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  searchTerms.value = [...searchTerms.value, { value: trimmed, op: op ?? activeLogic.value, source }];
+};
+
+const handleAddPreset = (value: string) => {
+  addSearchTerm(value, "preset");
+};
+
+const handleAddCustom = () => {
+  addSearchTerm(customSearchInput.value, "custom");
+  customSearchInput.value = "";
+};
+
+const removeTrackedTerms = () => {
+  searchTerms.value = searchTerms.value.filter((t) => t.source !== "tracked");
+};
+
+const handleSelectTracked = async (value: number | null) => {
+  if (value == null) {
+    trackedSelection.value = null;
+    removeTrackedTerms();
+    aliasModalVisible.value = false;
+    return;
+  }
+  const target = trackedItems.value.find((item) => item.id === value);
+  if (!target) {
+    trackedSelection.value = null;
+    removeTrackedTerms();
+    aliasModalVisible.value = false;
+    return;
+  }
+
+  pendingTrackedId.value = value;
+  pendingTrackedName.value = target.nameCn || target.name || "";
+  aliasModalVisible.value = true;
+  aliasLoading.value = true;
+  aliasOptions.value = [];
+  aliasSelected.value = [];
+
+  const aliasSet = new Set<string>();
+  const baseName = (pendingTrackedName.value || "").trim();
+  if (baseName) aliasSet.add(baseName);
+  try {
+    const payload = await invoke<{ id: number; aliases: string[] }>("get_subject_aliases", { id: value });
+    (payload.aliases || []).forEach((a) => {
+      const t = (a || "").trim();
+      if (t && !aliasSet.has(t)) aliasSet.add(t);
+    });
+  } catch (_) {
+    // 保留已有别名集合
+  } finally {
+    const list = Array.from(aliasSet);
+    const base = baseName || "";
+    const ordered = base ? [base, ...list.filter((v) => v !== base)] : list;
+    aliasOptions.value = ordered;
+    aliasSelected.value = [];
+    aliasLoading.value = false;
+  }
+};
+
+const cancelAliasSelection = () => {
+  aliasModalVisible.value = false;
+  aliasLoading.value = false;
+  pendingTrackedId.value = null;
+  pendingTrackedName.value = "";
+  aliasOptions.value = [];
+  aliasSelected.value = [];
+  // 清空下拉选中，避免误认为已加入
+  trackedSelection.value = null;
+};
+
+const confirmAliasSelection = () => {
+  if (!pendingTrackedId.value) {
+    cancelAliasSelection();
+    return;
+  }
+  if (!aliasSelected.value.length) {
+    // 没选名称则不添加
+    cancelAliasSelection();
+    return;
+  }
+  removeTrackedTerms();
+  trackedSelection.value = pendingTrackedId.value;
+  const seen = new Set<string>();
+  aliasSelected.value.forEach((term) => {
+    const t = term.trim();
+    if (t && !seen.has(t)) {
+      seen.add(t);
+      addSearchTerm(t, "tracked", "and");
+    }
+  });
+  cancelAliasSelection();
+};
+
+
+const removeSearchTerm = (index: number) => {
+  searchTerms.value = searchTerms.value.filter((_, i) => i !== index);
+};
+
+const queryParts = computed(() => {
+  const andTerms = searchTerms.value.filter((t) => t.op === "and").map((t) => `"${t.value}"`);
+  const notTerms = searchTerms.value.filter((t) => t.op === "not").map((t) => `-"${t.value}"`);
+  const orTermsRaw = searchTerms.value.filter((t) => t.op === "or").map((t) => `"${t.value}"`);
+  // 用管道符将 OR 词汇连接，不包裹括号
+  const orTerm = orTermsRaw.length ? orTermsRaw.join("|") : "";
+  const parts = [...andTerms, ...(orTerm ? [orTerm] : []), ...notTerms];
+  return parts.filter(Boolean);
+});
+
+const searchQuery = computed(() => queryParts.value.join(" "));
+const searchUrl = computed(() => `${NYAA_BASE}${encodeURIComponent(searchQuery.value)}`);
+
+const openSearch = () => {
+  if (!searchQuery.value) return;
+  window.open(searchUrl.value, "_blank");
+};
 
 const monthFilter = ref<Array<number | string>>([]);
 const typeFilter = ref<string[]>([]);
@@ -1577,8 +1726,91 @@ watch(activePage, (next, prev) => {
       </div>
 
       <div v-else class="app-body search-view">
-        <NCard title="搜索资源" size="small" class="search-placeholder">
-          <p>搜索资源页面正在建设中，敬请期待。</p>
+        <NCard size="small" class="search-panel">
+          <template #header>
+            <div class="search-card-header">
+              <span>搜索资源</span>
+              <span class="search-hint header-hint">先选逻辑，再添加短语或番剧；逻辑只对后续新增项生效</span>
+            </div>
+          </template>
+          <div class="search-controls">
+            <div class="search-row">
+              <span class="search-label">逻辑</span>
+              <div class="search-button-group logic-group">
+                <NButton
+                  v-for="logic in logicOptions"
+                  :key="logic.value"
+                  secondary
+                  size="small"
+                  :type="activeLogic === logic.value ? 'primary' : 'default'"
+                  @click="activeLogic = logic.value"
+                >
+                  {{ logic.label }}
+                </NButton>
+              </div>
+            </div>
+
+            <div class="search-row">
+              <span class="search-label">预设</span>
+              <div class="search-button-group">
+                <NButton
+                  v-for="phrase in presetPhrases"
+                  :key="phrase"
+                  size="small"
+                  secondary
+                  @click="handleAddPreset(phrase)"
+                >
+                  {{ phrase }}
+                </NButton>
+              </div>
+            </div>
+
+            <div class="search-row compact">
+              <span class="search-label">番剧</span>
+              <NSelect
+                v-model:value="trackedSelection"
+                :options="trackedOptions"
+                placeholder="选择正在追番/补番/已完番剧"
+                clearable
+                @update:value="handleSelectTracked"
+              />
+              <NInput
+                v-model:value="customSearchInput"
+                placeholder="输入自定义精确短语"
+                clearable
+                @keyup.enter="handleAddCustom"
+                class="search-input-flex"
+              />
+              <NButton type="primary" @click="handleAddCustom">添加</NButton>
+            </div>
+
+            <div class="search-row search-tags" v-if="searchTerms.length">
+              <span class="search-label">已选</span>
+              <div class="search-tag-list">
+                <NTag
+                  v-for="(term, idx) in searchTerms"
+                  :key="idx"
+                  size="small"
+                  closable
+                  @close="removeSearchTerm(idx)"
+                >
+                  <span class="term-op">{{ term.op === 'and' ? '与' : term.op === 'or' ? '或' : '非' }}</span>
+                  <span class="term-value">{{ term.value }}</span>
+                </NTag>
+              </div>
+            </div>
+
+            <div class="search-row">
+              <span class="search-label">拼接结果</span>
+              <div class="search-preview">
+                <div class="search-query">{{ searchQuery || '（尚未添加关键词）' }}</div>
+                <div class="search-url" v-if="searchQuery">
+                  <a :href="searchUrl" target="_blank" rel="noreferrer">{{ searchUrl }}</a>
+                </div>
+              </div>
+              <NButton type="primary" :disabled="!searchQuery" @click="openSearch">打开搜索</NButton>
+            </div>
+          </div>
         </NCard>
       </div>
     </div>
@@ -1606,6 +1838,34 @@ watch(activePage, (next, prev) => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </NModal>
+
+    <NModal
+      v-model:show="aliasModalVisible"
+      preset="card"
+      title="选择名称 / 别名"
+      size="small"
+      :style="{ width: 'auto', maxWidth: '520px' }"
+    >
+      <div class="alias-modal-body">
+        <p class="alias-title">为 {{ pendingTrackedName || "该番剧" }} 选择要加入的名称</p>
+        <p v-if="aliasLoading" class="alias-hint">正在获取别名...</p>
+        <template v-else>
+          <NCheckboxGroup v-model:value="aliasSelected">
+            <div class="alias-list">
+              <NCheckbox v-for="name in aliasOptions" :key="name" :value="name" class="alias-item">
+                {{ name }}
+              </NCheckbox>
+            </div>
+          </NCheckboxGroup>
+        </template>
+        <div class="alias-actions">
+          <NButton size="small" @click="cancelAliasSelection">取消</NButton>
+          <NButton size="small" type="primary" :disabled="aliasLoading || !aliasSelected.length" @click="confirmAliasSelection">
+            确定
+          </NButton>
         </div>
       </div>
     </NModal>
