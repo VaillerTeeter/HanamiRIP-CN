@@ -327,8 +327,16 @@ const formatMonth = (value: number) => String(value).padStart(2, "0");
 // --- 搜索资源 ---
 type LogicOp = "and" | "or" | "not";
 type SearchTerm = { value: string; op: LogicOp; source: "preset" | "custom" | "tracked" };
+type SearchResult = {
+  title: string;
+  detailUrl?: string;
+  magnet?: string;
+  download?: string;
+  size?: string;
+  date?: string;
+};
 const NYAA_BASE = "https://nyaa.vaciller.top/?f=0&c=0_0&q=";
-const presetPhrases = ["SubsPlease", "LoliHouse", "内封", "外挂"];
+const presetPhrases = ["SubsPlease", "LoliHouse", "内封", "外挂", "480", "720", "1080"];
 const logicOptions: { label: string; value: LogicOp }[] = [
   { label: "与", value: "and" },
   { label: "或", value: "or" },
@@ -338,6 +346,10 @@ const activeLogic = ref<LogicOp>("and");
 const searchTerms = ref<SearchTerm[]>([]);
 const customSearchInput = ref("");
 const trackedSelection = ref<number | null>(null);
+const searchModalVisible = ref(false);
+const searchLoading = ref(false);
+const searchError = ref("");
+const searchResults = ref<SearchResult[]>([]);
 const aliasModalVisible = ref(false);
 const aliasLoading = ref(false);
 const aliasOptions = ref<string[]>([]);
@@ -466,9 +478,63 @@ const queryParts = computed(() => {
 const searchQuery = computed(() => queryParts.value.join(" "));
 const searchUrl = computed(() => `${NYAA_BASE}${encodeURIComponent(searchQuery.value)}`);
 
-const openSearch = () => {
+const parseSearchResults = (html: string): SearchResult[] => {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const rows = Array.from(doc.querySelectorAll("table tbody tr"));
+    const toAbs = (href?: string | null) => {
+      if (!href) return undefined;
+      try {
+        return new URL(href, searchUrl.value).toString();
+      } catch (_) {
+        return href || undefined;
+      }
+    };
+
+    return rows
+      .map((tr) => {
+        const nameCell = tr.querySelector("td:nth-child(2)");
+        const anchorCandidates = nameCell
+          ? Array.from(nameCell.querySelectorAll("a"))
+          : [];
+        const nameLink = anchorCandidates
+          .filter((a) => a.getAttribute("href")?.includes("/view/"))
+          .pop();
+        if (!nameLink) return null;
+        const title = nameLink.textContent?.trim() || "";
+        const detailUrl = toAbs(nameLink.getAttribute("href"));
+        const magnet = toAbs(tr.querySelector("a[href^='magnet:']")?.getAttribute("href"));
+        const download = toAbs(tr.querySelector("a[href$='.torrent']")?.getAttribute("href"));
+        const size = tr.querySelector("td:nth-child(5)")?.textContent?.trim() || undefined;
+        const date = tr.querySelector("td:nth-child(6)")?.textContent?.trim() || undefined;
+        if (!title) return null;
+        return { title, detailUrl, magnet, download, size, date } as SearchResult;
+      })
+      .filter((v): v is SearchResult => Boolean(v));
+  } catch (e) {
+    console.error("parseSearchResults error", e);
+    return [];
+  }
+};
+
+const openSearch = async () => {
   if (!searchQuery.value) return;
-  window.open(searchUrl.value, "_blank");
+  searchModalVisible.value = true;
+  searchLoading.value = true;
+  searchError.value = "";
+  searchResults.value = [];
+  try {
+    const html = await invoke<string>("fetch_search_html", { url: searchUrl.value });
+    searchResults.value = parseSearchResults(html);
+  } catch (err: any) {
+    searchError.value = typeof err === "string" ? err : err?.message || "获取搜索结果失败";
+  } finally {
+    searchLoading.value = false;
+  }
+};
+const cancelOpenSearch = () => {
+  searchModalVisible.value = false;
 };
 
 const monthFilter = ref<Array<number | string>>([]);
@@ -1804,9 +1870,6 @@ watch(activePage, (next, prev) => {
               <span class="search-label">拼接结果</span>
               <div class="search-preview">
                 <div class="search-query">{{ searchQuery || '（尚未添加关键词）' }}</div>
-                <div class="search-url" v-if="searchQuery">
-                  <a :href="searchUrl" target="_blank" rel="noreferrer">{{ searchUrl }}</a>
-                </div>
               </div>
               <NButton type="primary" :disabled="!searchQuery" @click="openSearch">打开搜索</NButton>
             </div>
@@ -1838,6 +1901,36 @@ watch(activePage, (next, prev) => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </NModal>
+
+    <NModal v-model:show="searchModalVisible" preset="card" title="搜索结果" size="large">
+      <div class="search-open-modal">
+        <p class="search-modal-row">
+          <span class="search-modal-label">URL：</span>
+          <a :href="searchUrl" target="_blank" rel="noreferrer">{{ searchUrl }}</a>
+        </p>
+        <div v-if="searchResults.length" class="search-result-list">
+          <div class="search-result-row" v-for="item in searchResults" :key="item.detailUrl || item.title">
+            <div class="sr-name">
+              <a :href="item.detailUrl || item.magnet || item.download" target="_blank" rel="noreferrer">{{ item.title }}</a>
+              <div class="sr-meta" v-if="item.size || item.date">
+                <span v-if="item.size">{{ item.size }}</span>
+                <span v-if="item.date">{{ item.date }}</span>
+              </div>
+            </div>
+            <div class="sr-links">
+              <a v-if="item.magnet" :href="item.magnet" target="_blank" rel="noreferrer">磁链</a>
+              <a v-if="item.download" :href="item.download" target="_blank" rel="noreferrer">种子</a>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!searchLoading && !searchError" class="search-empty">未解析到结果</div>
+        <div v-if="searchLoading" class="search-loading">正在加载...</div>
+        <div v-else-if="searchError" class="search-error">{{ searchError }}</div>
+        <div class="search-modal-actions">
+          <NButton size="small" @click="cancelOpenSearch">关闭</NButton>
         </div>
       </div>
     </NModal>

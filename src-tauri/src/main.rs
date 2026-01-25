@@ -1188,6 +1188,22 @@ async fn get_subject_brief(id: u32) -> Result<SubjectBriefResponse, String> {
 }
 
 #[tauri::command]
+async fn fetch_search_html(url: String) -> Result<String, String> {
+  let client = reqwest::Client::builder()
+    .user_agent("HanamiRIP-CN/0.1")
+    .build()
+    .map_err(|e| e.to_string())?;
+
+  let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+  if !response.status().is_success() {
+    return Err(format!("搜索站点请求失败: {}", response.status()));
+  }
+
+  let body = response.text().await.map_err(|e| e.to_string())?;
+  Ok(body)
+}
+
+#[tauri::command]
 fn list_tracked_subjects(app: tauri::AppHandle) -> Result<Vec<TrackedSubject>, String> {
   let data = load_tracked(&app)?;
   Ok(data.values().cloned().collect())
@@ -1245,6 +1261,7 @@ fn main() {
       get_subject_characters,
       get_subject_summary_cn,
       get_subject_brief,
+      fetch_search_html,
       get_subject_aliases,
       list_tracked_subjects,
       save_tracked_subject
