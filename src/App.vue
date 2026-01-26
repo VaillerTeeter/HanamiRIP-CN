@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   NButton,
@@ -74,16 +75,19 @@ interface SeasonResponse {
 const isDark = ref(false);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 
-type PageKey = "query" | "watching" | "backlog" | "finished" | "search";
+type PageKey = "query" | "watching" | "backlog" | "finished" | "search" | "download";
 const activePage = ref<PageKey>("query");
 const isQueryPage = computed(() => activePage.value === "query");
 const isWatchingPage = computed(() => activePage.value === "watching");
 const isBacklogPage = computed(() => activePage.value === "backlog");
 const isFinishedPage = computed(() => activePage.value === "finished");
 const isSearchPage = computed(() => activePage.value === "search");
+const isDownloadPage = computed(() => activePage.value === "download");
 const switchPage = (page: PageKey) => {
   activePage.value = page;
 };
+const downloads = ref<DownloadItem[]>([]);
+let downloadSeq = 1;
 
 const appWindow = getCurrentWindow();
 
@@ -335,6 +339,15 @@ type SearchResult = {
   size?: string;
   date?: string;
 };
+type DownloadItem = {
+  id: number;
+  title: string;
+  link: string;
+  kind: "magnet" | "torrent";
+  startedAt: string;
+  status: "started" | "failed";
+  path?: string;
+};
 const NYAA_BASE = "https://nyaa.vaciller.top/?f=0&c=0_0&q=";
 const presetPhrases = ["SubsPlease", "LoliHouse", "内封", "外挂", "480", "720", "1080"];
 const logicOptions: { label: string; value: LogicOp }[] = [
@@ -349,6 +362,7 @@ const trackedSelection = ref<number | null>(null);
 const searchModalVisible = ref(false);
 const searchLoading = ref(false);
 const searchError = ref("");
+const searchHtml = ref("");
 const searchResults = ref<SearchResult[]>([]);
 const aliasModalVisible = ref(false);
 const aliasLoading = ref(false);
@@ -478,6 +492,17 @@ const queryParts = computed(() => {
 const searchQuery = computed(() => queryParts.value.join(" "));
 const searchUrl = computed(() => `${NYAA_BASE}${encodeURIComponent(searchQuery.value)}`);
 
+const injectBaseTag = (html: string, url: string) => {
+  const baseHref = url.split("?")[0];
+  const baseTag = `<base href="${baseHref}" />`;
+  const headMatch = html.match(/<head[^>]*>/i);
+  if (headMatch && headMatch.index !== undefined) {
+    const idx = headMatch.index + headMatch[0].length;
+    return `${html.slice(0, idx)}${baseTag}${html.slice(idx)}`;
+  }
+  return `<head>${baseTag}</head>${html}`;
+};
+
 const parseSearchResults = (html: string): SearchResult[] => {
   try {
     const parser = new DOMParser();
@@ -524,8 +549,10 @@ const openSearch = async () => {
   searchLoading.value = true;
   searchError.value = "";
   searchResults.value = [];
+  searchHtml.value = "";
   try {
     const html = await invoke<string>("fetch_search_html", { url: searchUrl.value });
+    searchHtml.value = injectBaseTag(html, searchUrl.value);
     searchResults.value = parseSearchResults(html);
   } catch (err: any) {
     searchError.value = typeof err === "string" ? err : err?.message || "获取搜索结果失败";
@@ -535,6 +562,53 @@ const openSearch = async () => {
 };
 const cancelOpenSearch = () => {
   searchModalVisible.value = false;
+};
+
+const addDownload = (title: string, link: string, kind: DownloadItem["kind"], path?: string) => {
+  const startedAt = new Date().toISOString();
+  downloads.value = [
+    {
+      id: downloadSeq++,
+      title,
+      link,
+      kind,
+      startedAt,
+      status: "started",
+      path,
+    },
+    ...downloads.value,
+  ];
+};
+
+const openExternalLink = async (url?: string | null) => {
+  if (!url) return;
+  try {
+    await invoke("open_external_link", { url });
+  } catch (err) {
+    console.error("openExternalLink failed", err);
+    window.open(url, "_blank");
+  }
+};
+
+const handleDownloadClick = async (item: SearchResult, kind: DownloadItem["kind"], link?: string) => {
+  if (!link) return;
+
+  let path: string | undefined;
+  try {
+    const result = await openDialog({
+      title: kind === "magnet" ? "选择磁链下载目录" : "选择种子保存目录",
+      directory: true,
+      multiple: false,
+    });
+    if (!result || Array.isArray(result)) return; // 用户取消或选中了多个目录
+    path = String(result);
+  } catch (err) {
+    console.error("openDialog failed", err);
+    return;
+  }
+
+  addDownload(item.title, link, kind, path);
+  // 仅记录下载信息，后续由用户自行处理
 };
 
 const monthFilter = ref<Array<number | string>>([]);
@@ -1375,6 +1449,14 @@ watch(activePage, (next, prev) => {
             >
               搜索资源
             </NButton>
+            <NButton
+              secondary
+              :type="isDownloadPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('download')"
+            >
+              下载
+            </NButton>
           </div>
         </div>
         <div class="titlebar-actions" aria-label="window actions" data-tauri-drag-region="false">
@@ -1556,6 +1638,7 @@ watch(activePage, (next, prev) => {
                       :href="selected.url"
                       target="_blank"
                       rel="noreferrer"
+                      @click.prevent="openExternalLink(selected?.url)"
                     >
                       {{ selected.nameCn || selected.name }}
                     </a>
@@ -1637,6 +1720,7 @@ watch(activePage, (next, prev) => {
                               :href="item.url"
                               target="_blank"
                               rel="noreferrer"
+                              @click.prevent="openExternalLink(item.url)"
                             >
                               {{ item.name }}
                             </a>
@@ -1680,7 +1764,13 @@ watch(activePage, (next, prev) => {
                     <img :src="item.image" :alt="item.name" />
                   </div>
                   <div class="watchlist-body">
-                    <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                    <a
+                      class="watchlist-title"
+                      :href="item.url"
+                      target="_blank"
+                      rel="noreferrer"
+                      @click.prevent="openExternalLink(item.url)"
+                    >
                       {{ item.nameCn || item.name }}
                     </a>
                     <div class="watchlist-meta">
@@ -1733,7 +1823,13 @@ watch(activePage, (next, prev) => {
                 <img :src="item.image" :alt="item.name" />
               </div>
               <div class="watchlist-body">
-                <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                  <a
+                    class="watchlist-title"
+                    :href="item.url"
+                    target="_blank"
+                    rel="noreferrer"
+                    @click.prevent="openExternalLink(item.url)"
+                  >
                   {{ item.nameCn || item.name }}
                 </a>
                 <div class="watchlist-meta">
@@ -1766,7 +1862,13 @@ watch(activePage, (next, prev) => {
                 <img :src="item.image" :alt="item.name" />
               </div>
               <div class="watchlist-body">
-                <a class="watchlist-title" :href="item.url" target="_blank" rel="noreferrer">
+                <a
+                  class="watchlist-title"
+                  :href="item.url"
+                  target="_blank"
+                  rel="noreferrer"
+                  @click.prevent="openExternalLink(item.url)"
+                >
                   {{ item.nameCn || item.name }}
                 </a>
                 <div class="watchlist-meta">
@@ -1788,6 +1890,28 @@ watch(activePage, (next, prev) => {
             </div>
           </div>
           <p v-else class="watchlist-empty">还没有标记已看的番剧。</p>
+        </NCard>
+      </div>
+
+      <div v-else-if="isDownloadPage" class="app-body download-view">
+        <NCard title="下载" size="small" class="download-card">
+          <div v-if="downloads.length" class="download-list">
+            <div v-for="item in downloads" :key="item.id" class="download-row">
+              <div class="download-main">
+                <div class="download-title">{{ item.title }}</div>
+                <div class="download-meta">
+                  <span class="pill">{{ item.kind === 'magnet' ? '磁链' : '种子' }}</span>
+                  <span class="pill">{{ item.status === 'started' ? '已启动' : '失败' }}</span>
+                  <span class="pill">{{ item.startedAt }}</span>
+                  <span v-if="item.path" class="pill path-pill" :title="item.path">{{ item.path }}</span>
+                </div>
+              </div>
+              <div class="download-actions">
+                <NButton size="tiny" text type="primary" @click="openExternalLink(item.link)">重新打开</NButton>
+              </div>
+            </div>
+          </div>
+          <p v-else class="download-empty">暂无下载记录。</p>
         </NCard>
       </div>
 
@@ -1895,6 +2019,7 @@ watch(activePage, (next, prev) => {
                   :href="person.url"
                   target="_blank"
                   rel="noreferrer"
+                        @click.prevent="openExternalLink(person.url)"
                 >
                   {{ person.name }}
                 </a>
@@ -1907,26 +2032,62 @@ watch(activePage, (next, prev) => {
 
     <NModal v-model:show="searchModalVisible" preset="card" title="搜索结果" size="large">
       <div class="search-open-modal">
-        <p class="search-modal-row">
+          <p class="search-modal-row">
           <span class="search-modal-label">URL：</span>
-          <a :href="searchUrl" target="_blank" rel="noreferrer">{{ searchUrl }}</a>
+          <a
+            :href="searchUrl"
+            target="_blank"
+            rel="noreferrer"
+            @click.prevent="openExternalLink(searchUrl)"
+          >
+            {{ searchUrl }}
+          </a>
         </p>
         <div v-if="searchResults.length" class="search-result-list">
           <div class="search-result-row" v-for="item in searchResults" :key="item.detailUrl || item.title">
             <div class="sr-name">
-              <a :href="item.detailUrl || item.magnet || item.download" target="_blank" rel="noreferrer">{{ item.title }}</a>
+              <a
+                :href="item.detailUrl || item.magnet || item.download"
+                target="_blank"
+                rel="noreferrer"
+                @click.prevent="openExternalLink(item.detailUrl || item.magnet || item.download)"
+              >
+                {{ item.title }}
+              </a>
               <div class="sr-meta" v-if="item.size || item.date">
                 <span v-if="item.size">{{ item.size }}</span>
                 <span v-if="item.date">{{ item.date }}</span>
               </div>
             </div>
             <div class="sr-links">
-              <a v-if="item.magnet" :href="item.magnet" target="_blank" rel="noreferrer">磁链</a>
-              <a v-if="item.download" :href="item.download" target="_blank" rel="noreferrer">种子</a>
+              <NButton
+                v-if="item.magnet"
+                text
+                type="primary"
+                size="small"
+                @click="handleDownloadClick(item, 'magnet', item.magnet)"
+              >
+                磁链
+              </NButton>
+              <NButton
+                v-if="item.download"
+                text
+                type="primary"
+                size="small"
+                @click="handleDownloadClick(item, 'torrent', item.download)"
+              >
+                种子
+              </NButton>
             </div>
           </div>
         </div>
-        <div v-else-if="!searchLoading && !searchError" class="search-empty">未解析到结果</div>
+        <iframe
+          v-else-if="!searchLoading && !searchError"
+          class="search-preview-frame"
+          :srcdoc="searchHtml"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          title="搜索页面"
+        />
         <div v-if="searchLoading" class="search-loading">正在加载...</div>
         <div v-else-if="searchError" class="search-error">{{ searchError }}</div>
         <div class="search-modal-actions">

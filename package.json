@@ -4,9 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build:baidu-so": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && mkdir -p src-tauri/baidu_verify && cp src-tauri/baidu_verify/target/release/libbaidu_verify.so src-tauri/baidu_verify/libbaidu_verify.so",
+    "build:baidu-so": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml",
+    "build:baidu-so:linux": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && mkdir -p src-tauri/baidu_verify && cp src-tauri/baidu_verify/target/release/libbaidu_verify.so src-tauri/baidu_verify/libbaidu_verify.so",
+    "build:baidu-so:windows": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && powershell -Command \"Copy-Item 'src-tauri/baidu_verify/target/release/baidu_verify.dll' -Destination 'src-tauri/baidu_verify/baidu_verify.dll' -Force\"",
     "dev": "vite --port 1420 --strictPort",
-    "clean:all": "rm -rf node_modules dist src-tauri/target src-tauri/baidu_verify/target src-tauri/baidu_verify/libbaidu_verify.so src-tauri/gen/schemas/",
+    "clean:all": "node scripts/clean.js",
     "debug": "tauri dev",
     "build": "tauri build",
     "test": "echo \"No tests configured yet\"",
@@ -14,6 +16,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-fs": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
     "naive-ui": "^2.39.0",
     "vue": "^3.4.0"
   },
@@ -21,6 +25,7 @@
     "@tauri-apps/cli": "^2.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "cheerio": "^1.0.0-rc.12",
+    "rimraf": "^6.1.2",
     "typescript": "^5.6.0",
     "vite": "^5.4.0"
   }

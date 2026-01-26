@@ -13,6 +13,8 @@ use tauri::Manager;
 use std::env;
 use std::os::raw::c_char;
 use std::path::Path;
+use open;
+use tauri_plugin_dialog::init as dialog_plugin;
 
 const API_BASE: &str = "https://api.bgm.tv";
 const SUBJECTS_PATH: &str = "/v0/subjects";
@@ -562,18 +564,55 @@ static BAIDU_VERIFIER: OnceCell<BaiduVerifier> = OnceCell::new();
 fn load_baidu_verifier() -> Result<&'static BaiduVerifier, String> {
   BAIDU_VERIFIER.get_or_try_init(|| {
     let lib_path = env::var("BAIDU_VERIFY_SO").unwrap_or_else(|_| {
+      // Windows uses .dll, Linux/macOS use .so/.dylib
+      #[cfg(target_os = "windows")]
+      let candidates = [
+        "src-tauri/baidu_verify/baidu_verify.dll",
+        "baidu_verify/baidu_verify.dll",
+        "src-tauri\\baidu_verify\\baidu_verify.dll",
+        "baidu_verify\\baidu_verify.dll",
+      ];
+      
+      #[cfg(target_os = "macos")]
+      let candidates = [
+        "src-tauri/baidu_verify/libbaidu_verify.dylib",
+        "baidu_verify/libbaidu_verify.dylib",
+      ];
+      
+      #[cfg(not(any(target_os = "windows", target_os = "macos")))]
       let candidates = [
         "src-tauri/baidu_verify/libbaidu_verify.so",
         "baidu_verify/libbaidu_verify.so",
       ];
+      
       candidates
         .iter()
         .find(|path| Path::new(path).exists())
         .unwrap_or(&candidates[0])
         .to_string()
     });
+    
+    // Check if the library file exists before attempting to load
+    if !Path::new(&lib_path).exists() {
+      #[cfg(target_os = "windows")]
+      let lib_name = "baidu_verify.dll";
+      #[cfg(target_os = "macos")]
+      let lib_name = "libbaidu_verify.dylib";
+      #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+      let lib_name = "libbaidu_verify.so";
+      
+      return Err(format!(
+        "找不到百度翻译动态库文件: {}\n\
+         请先构建动态库：\n\
+         1. 设置环境变量 BAIDU_TRANSLATE_APP_ID 和 BAIDU_TRANSLATE_API_KEY\n\
+         2. 运行命令: yarn run build:baidu-so:windows (Windows) 或 yarn run build:baidu-so:linux (Linux)\n\
+         3. 确保生成的 {} 文件位于 src-tauri/baidu_verify/ 目录下",
+        lib_path, lib_name
+      ));
+    }
+    
     let lib = unsafe { Library::new(&lib_path) }
-      .map_err(|e| format!("加载百度翻译校验库失败: {e}"))?;
+      .map_err(|e| format!("加载百度翻译校验库失败 ({}): {}", lib_path, e))?;
     let get_app_id = {
       let symbol: Symbol<unsafe extern "C" fn() -> *const c_char> =
         unsafe { lib.get(b"baidu_get_app_id") }
@@ -1204,6 +1243,11 @@ async fn fetch_search_html(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn open_external_link(url: String) -> Result<(), String> {
+  open::that(url).map_err(|err| format!("打开外部链接失败: {err}"))
+}
+
+#[tauri::command]
 fn list_tracked_subjects(app: tauri::AppHandle) -> Result<Vec<TrackedSubject>, String> {
   let data = load_tracked(&app)?;
   Ok(data.values().cloned().collect())
@@ -1252,6 +1296,7 @@ async fn get_season_subjects(year: u32, season: String) -> Result<SeasonResponse
 
 fn main() {
   tauri::Builder::default()
+    .plugin(dialog_plugin())
     .invoke_handler(tauri::generate_handler![
       get_season_subjects,
       get_subject_origin,
@@ -1262,6 +1307,7 @@ fn main() {
       get_subject_summary_cn,
       get_subject_brief,
       fetch_search_html,
+      open_external_link,
       get_subject_aliases,
       list_tracked_subjects,
       save_tracked_subject

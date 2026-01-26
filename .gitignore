@@ -3,3 +3,4 @@ src-tauri/target/
 src-tauri/gen/schemas/
 src-tauri/baidu_verify/target/*
 src-tauri/baidu_verify/libbaidu_verify.so
+src-tauri/baidu_verify/baidu_verify.dll
