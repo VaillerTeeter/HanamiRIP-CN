@@ -90,6 +90,7 @@ const downloads = ref<DownloadItem[]>([]);
 let downloadSeq = 1;
 
 const appWindow = getCurrentWindow();
+let downloadPoller: number | null = null;
 
 const handleMinimize = async () => {
   await appWindow.minimize();
@@ -345,8 +346,21 @@ type DownloadItem = {
   link: string;
   kind: "magnet" | "torrent";
   startedAt: string;
-  status: "started" | "failed";
+  status: "started" | "failed" | "completed" | "paused";
   path?: string;
+  tempPath?: string;
+  finalPath?: string;
+  finalized?: boolean;
+  torrentId?: number;
+  infoHash?: string;
+  progressBytes?: number;
+  totalBytes?: number;
+  uploadedBytes?: number;
+  state?: string;
+  error?: string;
+  downloadSpeed?: string;
+  uploadSpeed?: string;
+  timeRemaining?: string;
 };
 const NYAA_BASE = "https://nyaa.vaciller.top/?f=0&c=0_0&q=";
 const presetPhrases = ["SubsPlease", "LoliHouse", "内封", "外挂", "480", "720", "1080"];
@@ -359,7 +373,6 @@ const activeLogic = ref<LogicOp>("and");
 const searchTerms = ref<SearchTerm[]>([]);
 const customSearchInput = ref("");
 const trackedSelection = ref<number | null>(null);
-const searchModalVisible = ref(false);
 const searchLoading = ref(false);
 const searchError = ref("");
 const searchHtml = ref("");
@@ -545,7 +558,6 @@ const parseSearchResults = (html: string): SearchResult[] => {
 
 const openSearch = async () => {
   if (!searchQuery.value) return;
-  searchModalVisible.value = true;
   searchLoading.value = true;
   searchError.value = "";
   searchResults.value = [];
@@ -560,11 +572,19 @@ const openSearch = async () => {
     searchLoading.value = false;
   }
 };
-const cancelOpenSearch = () => {
-  searchModalVisible.value = false;
+const clearSearchResults = () => {
+  searchResults.value = [];
+  searchHtml.value = "";
+  searchError.value = "";
 };
 
-const addDownload = (title: string, link: string, kind: DownloadItem["kind"], path?: string) => {
+const addDownload = (
+  title: string,
+  link: string,
+  kind: DownloadItem["kind"],
+  path?: string,
+  payload?: Partial<DownloadItem>
+) => {
   const startedAt = new Date().toISOString();
   downloads.value = [
     {
@@ -575,9 +595,141 @@ const addDownload = (title: string, link: string, kind: DownloadItem["kind"], pa
       startedAt,
       status: "started",
       path,
+      ...payload,
     },
     ...downloads.value,
   ];
+};
+
+const formatBytes = (value?: number) => {
+  if (value == null || Number.isNaN(value)) return "-";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+};
+
+const parseSpeedToBps = (value?: string) => {
+  if (!value) return 0;
+  const match = value.match(/([\d.]+)\s*([a-zA-Z/]+)?/);
+  if (!match) return 0;
+  const num = Number.parseFloat(match[1]);
+  if (!Number.isFinite(num)) return 0;
+  const unitRaw = (match[2] || "B").replace(/\s*/g, "").replace(/\/s/i, "").toUpperCase();
+  const unit = unitRaw.endsWith("/S") ? unitRaw.slice(0, -2) : unitRaw;
+  const factorMap: Record<string, number> = {
+    B: 1,
+    KB: 1024,
+    KIB: 1024,
+    MB: 1024 ** 2,
+    MIB: 1024 ** 2,
+    GB: 1024 ** 3,
+    GIB: 1024 ** 3,
+    TB: 1024 ** 4,
+    TIB: 1024 ** 4,
+  };
+  const factor = factorMap[unit] ?? 1;
+  return num * factor;
+};
+
+const formatSpeed = (bps: number) => {
+  if (!Number.isFinite(bps) || bps <= 0) return "0 B/s";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"];
+  let size = bps;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
+};
+
+const formatDownloadStatus = (status: DownloadItem["status"]) => {
+  switch (status) {
+    case "completed":
+      return "已完成";
+    case "failed":
+      return "失败";
+    case "paused":
+      return "已暂停";
+    default:
+      return "下载中";
+  }
+};
+
+const downloadDisplayTitle = (item: DownloadItem) => {
+  if (item.status === "completed") return item.title;
+  if (item.status === "paused") return `${item.title}.paused`;
+  if (item.status === "failed") return `${item.title}.failed`;
+  return `${item.title}.downloading`;
+};
+
+const isDownloadPaused = (item: DownloadItem) => {
+  const state = item.state?.toLowerCase() ?? "";
+  return item.status === "paused" || state.includes("paused") || state.includes("stopped");
+};
+
+const isDownloadTerminal = (item: DownloadItem) => item.status === "completed" || item.status === "failed";
+
+const handlePauseDownload = async (item: DownloadItem) => {
+  if (item.torrentId == null || isDownloadTerminal(item) || isDownloadPaused(item)) return;
+  try {
+    await invoke("pause_torrent", { id: item.torrentId });
+    item.status = "paused";
+  } catch (err) {
+    console.error("pause_torrent failed", err);
+  }
+};
+
+const handleResumeDownload = async (item: DownloadItem) => {
+  if (item.torrentId == null || !isDownloadPaused(item)) return;
+  try {
+    await invoke("resume_torrent", { id: item.torrentId });
+    item.status = "started";
+  } catch (err) {
+    console.error("resume_torrent failed", err);
+  }
+};
+
+const handleDeleteDownload = async (item: DownloadItem) => {
+  if (item.torrentId != null) {
+    try {
+      await invoke("delete_torrent", { id: item.torrentId });
+    } catch (err) {
+      console.error("delete_torrent failed", err);
+      return;
+    }
+  }
+  downloads.value = downloads.value.filter((row) => row.id !== item.id);
+};
+
+const hasActiveDownloads = computed(() =>
+  downloads.value.some((item) => item.torrentId != null && !isDownloadTerminal(item) && !isDownloadPaused(item))
+);
+const hasPausedDownloads = computed(() =>
+  downloads.value.some((item) => item.torrentId != null && isDownloadPaused(item))
+);
+const totalDownloadBps = computed(() =>
+  downloads.value.reduce((sum, item) => sum + parseSpeedToBps(item.downloadSpeed), 0)
+);
+const totalUploadBps = computed(() =>
+  downloads.value.reduce((sum, item) => sum + parseSpeedToBps(item.uploadSpeed), 0)
+);
+const totalDownloadSpeedLabel = computed(() => formatSpeed(totalDownloadBps.value));
+const totalUploadSpeedLabel = computed(() => formatSpeed(totalUploadBps.value));
+
+const handlePauseAllDownloads = async () => {
+  const active = downloads.value.filter((item) => item.status === "started" && item.torrentId != null);
+  await Promise.all(active.map((item) => handlePauseDownload(item)));
+};
+
+const handleResumeAllDownloads = async () => {
+  const paused = downloads.value.filter((item) => item.status === "paused" && item.torrentId != null);
+  await Promise.all(paused.map((item) => handleResumeDownload(item)));
 };
 
 const openExternalLink = async (url?: string | null) => {
@@ -587,6 +739,78 @@ const openExternalLink = async (url?: string | null) => {
   } catch (err) {
     console.error("openExternalLink failed", err);
     window.open(url, "_blank");
+  }
+};
+
+const refreshDownloadStatuses = async () => {
+  const active = downloads.value.filter((item) => item.torrentId != null);
+  if (!active.length) return;
+
+  const updates = await Promise.all(
+    active.map(async (item) => {
+      try {
+        const stats = await invoke<{
+          id: number;
+          state: string;
+          progressBytes: number;
+          totalBytes: number;
+          uploadedBytes: number;
+          finished: boolean;
+          error?: string | null;
+          downloadSpeed?: string | null;
+          uploadSpeed?: string | null;
+          timeRemaining?: string | null;
+        }>("get_torrent_status", { id: item.torrentId });
+        return { id: item.id, stats };
+      } catch (err) {
+        console.error("get_torrent_status failed", err);
+        return { id: item.id, stats: null };
+      }
+    })
+  );
+
+  let shouldFinalize = false;
+  const updated = downloads.value.map((item) => {
+    const update = updates.find((u) => u.id === item.id)?.stats;
+    if (!update) return item;
+    const completed = update.finished;
+    const failed = Boolean(update.error);
+    const stateLower = update.state?.toLowerCase() ?? "";
+    const paused = stateLower.includes("paused") || stateLower.includes("stopped");
+    const next: DownloadItem = {
+      ...item,
+      status: completed ? "completed" : failed ? "failed" : paused ? "paused" : "started",
+      state: update.state,
+      progressBytes: update.progressBytes,
+      totalBytes: update.totalBytes,
+      uploadedBytes: update.uploadedBytes,
+      error: update.error ?? undefined,
+      downloadSpeed: update.downloadSpeed ?? undefined,
+      uploadSpeed: update.uploadSpeed ?? undefined,
+      timeRemaining: update.timeRemaining ?? undefined,
+    };
+    if (completed && !item.finalized && item.tempPath && item.finalPath) {
+      shouldFinalize = true;
+    }
+    return next;
+  });
+  downloads.value = updated;
+
+  if (shouldFinalize) {
+    await Promise.all(
+      downloads.value.map(async (item) => {
+        if (item.status !== "completed" || item.finalized || !item.tempPath || !item.finalPath) return;
+        try {
+          await invoke("finalize_torrent_download", {
+            tempFolder: item.tempPath,
+            finalFolder: item.finalPath,
+          });
+          item.finalized = true;
+        } catch (err) {
+          console.error("finalize_torrent_download failed", err);
+        }
+      })
+    );
   }
 };
 
@@ -607,8 +831,24 @@ const handleDownloadClick = async (item: SearchResult, kind: DownloadItem["kind"
     return;
   }
 
-  addDownload(item.title, link, kind, path);
-  // 仅记录下载信息，后续由用户自行处理
+  try {
+    const started = await invoke<{
+      id: number;
+      infoHash: string;
+      name?: string | null;
+      outputFolder: string;
+      finalFolder: string;
+    }>("start_torrent_download", { url: link, outputDir: path });
+    addDownload(item.title, link, kind, path, {
+      torrentId: started.id,
+      infoHash: started.infoHash,
+      tempPath: started.outputFolder,
+      finalPath: started.finalFolder,
+    });
+  } catch (err) {
+    console.error("start_torrent_download failed", err);
+    addDownload(item.title, link, kind, path, { status: "failed" });
+  }
 };
 
 const monthFilter = ref<Array<number | string>>([]);
@@ -779,6 +1019,9 @@ onMounted(async () => {
   if (height) {
     document.documentElement.style.setProperty("--query-panel-height", `${height}px`);
   }
+  if (downloadPoller == null) {
+    downloadPoller = window.setInterval(refreshDownloadStatuses, 1500);
+  }
   try {
     const saved = await invoke<TrackedItem[]>("list_tracked_subjects");
     syncStatusesFromTracked(saved);
@@ -787,6 +1030,13 @@ onMounted(async () => {
   } catch (_) {
     statuses.value = {};
     trackedItems.value = [];
+  }
+});
+
+onBeforeUnmount(() => {
+  if (downloadPoller != null) {
+    window.clearInterval(downloadPoller);
+    downloadPoller = null;
   }
 });
 
@@ -1895,19 +2145,114 @@ watch(activePage, (next, prev) => {
 
       <div v-else-if="isDownloadPage" class="app-body download-view">
         <NCard title="下载" size="small" class="download-card">
+          <div class="download-toolbar">
+            <div v-if="downloads.length" class="download-total-speed">
+              <span class="download-total-label">总速率</span>
+              <span class="pill">↓ {{ totalDownloadSpeedLabel }}</span>
+              <span class="pill">↑ {{ totalUploadSpeedLabel }}</span>
+            </div>
+            <div class="download-toolbar-actions">
+              <NButton
+                size="small"
+                secondary
+                class="icon-button"
+                :disabled="!hasActiveDownloads"
+                aria-label="全部暂停"
+                title="全部暂停"
+                @click="handlePauseAllDownloads"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="8" y1="6" x2="8" y2="18" />
+                  <line x1="16" y1="6" x2="16" y2="18" />
+                </svg>
+              </NButton>
+              <NButton
+                size="small"
+                secondary
+                class="icon-button"
+                :disabled="!hasPausedDownloads"
+                aria-label="全部继续"
+                title="全部继续"
+                @click="handleResumeAllDownloads"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <polygon points="9 7 19 12 9 17" />
+                </svg>
+              </NButton>
+            </div>
+          </div>
           <div v-if="downloads.length" class="download-list">
             <div v-for="item in downloads" :key="item.id" class="download-row">
               <div class="download-main">
-                <div class="download-title">{{ item.title }}</div>
+                <div class="download-title">{{ downloadDisplayTitle(item) }}</div>
                 <div class="download-meta">
                   <span class="pill">{{ item.kind === 'magnet' ? '磁链' : '种子' }}</span>
-                  <span class="pill">{{ item.status === 'started' ? '已启动' : '失败' }}</span>
+                  <span class="pill">{{ formatDownloadStatus(item.status) }}</span>
+                  <span v-if="item.state" class="pill">{{ item.state }}</span>
+                  <span v-if="item.downloadSpeed" class="pill">↓ {{ item.downloadSpeed }}</span>
+                  <span v-if="item.uploadSpeed" class="pill">↑ {{ item.uploadSpeed }}</span>
+                  <span v-if="item.timeRemaining" class="pill">剩余 {{ item.timeRemaining }}</span>
                   <span class="pill">{{ item.startedAt }}</span>
                   <span v-if="item.path" class="pill path-pill" :title="item.path">{{ item.path }}</span>
                 </div>
+                <div v-if="item.totalBytes" class="download-progress">
+                  <NProgress
+                    type="line"
+                    :percentage="Math.min(100, Math.round(((item.progressBytes ?? 0) / item.totalBytes) * 100))"
+                    :show-indicator="false"
+                    :height="8"
+                  />
+                  <div class="progress-text">
+                    {{ formatBytes(item.progressBytes) }} / {{ formatBytes(item.totalBytes) }}
+                  </div>
+                </div>
+                <div v-if="item.error" class="download-error">{{ item.error }}</div>
               </div>
               <div class="download-actions">
-                <NButton size="tiny" text type="primary" @click="openExternalLink(item.link)">重新打开</NButton>
+                <NButton
+                  size="tiny"
+                  text
+                  class="icon-button"
+                  :disabled="item.torrentId == null || isDownloadTerminal(item) || isDownloadPaused(item)"
+                  aria-label="暂停"
+                  title="暂停"
+                  @click="handlePauseDownload(item)"
+                >
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="8" y1="6" x2="8" y2="18" />
+                    <line x1="16" y1="6" x2="16" y2="18" />
+                  </svg>
+                </NButton>
+                <NButton
+                  size="tiny"
+                  text
+                  class="icon-button"
+                  :disabled="item.torrentId == null || !isDownloadPaused(item)"
+                  aria-label="继续"
+                  title="继续"
+                  @click="handleResumeDownload(item)"
+                >
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <polygon points="9 7 19 12 9 17" />
+                  </svg>
+                </NButton>
+                <NButton
+                  size="tiny"
+                  text
+                  type="error"
+                  class="icon-button"
+                  aria-label="删除"
+                  title="删除"
+                  @click="handleDeleteDownload(item)"
+                >
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16" />
+                    <path d="M9 7v12" />
+                    <path d="M15 7v12" />
+                    <path d="M6 7l1 13h10l1-13" />
+                    <path d="M9 4h6l1 3H8l1-3Z" />
+                  </svg>
+                </NButton>
               </div>
             </div>
           </div>
@@ -1997,6 +2342,76 @@ watch(activePage, (next, prev) => {
               </div>
               <NButton type="primary" :disabled="!searchQuery" @click="openSearch">打开搜索</NButton>
             </div>
+
+            <div
+              v-if="searchLoading || searchError || searchResults.length || searchHtml"
+              class="search-inline-results"
+            >
+              <div class="search-result-header">
+                <span>搜索结果</span>
+                <NButton size="tiny" secondary @click="clearSearchResults">收起</NButton>
+              </div>
+              <div class="search-open-modal">
+                <p class="search-modal-row">
+                  <span class="search-modal-label">URL：</span>
+                  <a
+                    :href="searchUrl"
+                    target="_blank"
+                    rel="noreferrer"
+                    @click.prevent="openExternalLink(searchUrl)"
+                  >
+                    {{ searchUrl }}
+                  </a>
+                </p>
+                <div v-if="searchResults.length" class="search-result-list">
+                  <div class="search-result-row" v-for="item in searchResults" :key="item.detailUrl || item.title">
+                    <div class="sr-name">
+                      <a
+                        :href="item.detailUrl || item.magnet || item.download"
+                        target="_blank"
+                        rel="noreferrer"
+                        @click.prevent="openExternalLink(item.detailUrl || item.magnet || item.download)"
+                      >
+                        {{ item.title }}
+                      </a>
+                      <div class="sr-meta" v-if="item.size || item.date">
+                        <span v-if="item.size">{{ item.size }}</span>
+                        <span v-if="item.date">{{ item.date }}</span>
+                      </div>
+                    </div>
+                    <div class="sr-links">
+                      <NButton
+                        v-if="item.magnet"
+                        text
+                        type="primary"
+                        size="small"
+                        @click="handleDownloadClick(item, 'magnet', item.magnet)"
+                      >
+                        磁链
+                      </NButton>
+                      <NButton
+                        v-if="item.download"
+                        text
+                        type="primary"
+                        size="small"
+                        @click="handleDownloadClick(item, 'torrent', item.download)"
+                      >
+                        种子
+                      </NButton>
+                    </div>
+                  </div>
+                </div>
+                <iframe
+                  v-else-if="!searchLoading && !searchError"
+                  class="search-preview-frame"
+                  :srcdoc="searchHtml"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  title="搜索页面"
+                />
+                <div v-if="searchLoading" class="search-loading">正在加载...</div>
+                <div v-else-if="searchError" class="search-error">{{ searchError }}</div>
+              </div>
+            </div>
           </div>
         </NCard>
       </div>
@@ -2026,72 +2441,6 @@ watch(activePage, (next, prev) => {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </NModal>
-
-    <NModal v-model:show="searchModalVisible" preset="card" title="搜索结果" size="large">
-      <div class="search-open-modal">
-          <p class="search-modal-row">
-          <span class="search-modal-label">URL：</span>
-          <a
-            :href="searchUrl"
-            target="_blank"
-            rel="noreferrer"
-            @click.prevent="openExternalLink(searchUrl)"
-          >
-            {{ searchUrl }}
-          </a>
-        </p>
-        <div v-if="searchResults.length" class="search-result-list">
-          <div class="search-result-row" v-for="item in searchResults" :key="item.detailUrl || item.title">
-            <div class="sr-name">
-              <a
-                :href="item.detailUrl || item.magnet || item.download"
-                target="_blank"
-                rel="noreferrer"
-                @click.prevent="openExternalLink(item.detailUrl || item.magnet || item.download)"
-              >
-                {{ item.title }}
-              </a>
-              <div class="sr-meta" v-if="item.size || item.date">
-                <span v-if="item.size">{{ item.size }}</span>
-                <span v-if="item.date">{{ item.date }}</span>
-              </div>
-            </div>
-            <div class="sr-links">
-              <NButton
-                v-if="item.magnet"
-                text
-                type="primary"
-                size="small"
-                @click="handleDownloadClick(item, 'magnet', item.magnet)"
-              >
-                磁链
-              </NButton>
-              <NButton
-                v-if="item.download"
-                text
-                type="primary"
-                size="small"
-                @click="handleDownloadClick(item, 'torrent', item.download)"
-              >
-                种子
-              </NButton>
-            </div>
-          </div>
-        </div>
-        <iframe
-          v-else-if="!searchLoading && !searchError"
-          class="search-preview-frame"
-          :srcdoc="searchHtml"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          title="搜索页面"
-        />
-        <div v-if="searchLoading" class="search-loading">正在加载...</div>
-        <div v-else-if="searchError" class="search-error">{{ searchError }}</div>
-        <div class="search-modal-actions">
-          <NButton size="small" @click="cancelOpenSearch">关闭</NButton>
         </div>
       </div>
     </NModal>

@@ -205,18 +205,21 @@ body {
 .search-view {
   align-items: flex-start;
   justify-content: flex-start;
-  padding-top: 24px;
+  padding: 16px;
 }
 
 .download-view {
   align-items: flex-start;
   justify-content: flex-start;
-  padding-top: 24px;
+  padding: 16px;
 }
 
 .download-card {
   width: 100%;
   max-width: 1400px;
+  min-height: 0;
+  max-height: 92vh;
+  overflow: auto;
 }
 
 .download-empty {
@@ -229,6 +232,32 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.download-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.download-total-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.download-total-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.download-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .download-row {
@@ -245,6 +274,7 @@ body {
 .download-title {
   font-weight: 600;
   color: #111827;
+  word-break: break-all;
 }
 
 .download-meta {
@@ -254,6 +284,24 @@ body {
   flex-wrap: wrap;
   font-size: 12px;
   color: #6b7280;
+}
+
+.download-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.download-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b91c1c;
 }
 
 .pill {
@@ -272,6 +320,36 @@ body {
 .download-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.icon-button {
+  min-width: 24px;
+  padding: 0 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: #374151;
+}
+
+.icon-button:disabled {
+  color: #9ca3af;
+}
+
+.icon-button .icon {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button .icon polygon {
+  fill: currentColor;
+  stroke: none;
 }
 
 .search-panel {
@@ -280,6 +358,24 @@ body {
   min-height: 0;
   max-height: 92vh;
   overflow: auto;
+}
+
+.search-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-inline-results {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .search-card-header {
