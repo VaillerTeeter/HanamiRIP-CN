@@ -701,6 +701,15 @@ type MixTrackInput = {
   trackIds: string[];
   trackLangs?: Record<string, string>;
 };
+type MixQueueStatus = "queued" | "running" | "success" | "failed";
+type MixQueueItem = {
+  id: number;
+  createdAt: string;
+  outputPath: string;
+  inputs: MixTrackInput[];
+  status: MixQueueStatus;
+  message?: string;
+};
 
 const trackFiles = ref<Record<TrackType, TrackItem[]>>({
   video: [],
@@ -730,7 +739,12 @@ const trackErrors = ref<Record<TrackType, string>>({
 const trackMixLoading = ref(false);
 const trackMixError = ref("");
 const trackMixResult = ref("");
+const mixQueue = ref<MixQueueItem[]>([]);
+const mixQueueRunning = ref(false);
+const mixQueueDetailVisible = ref(false);
+const selectedMixTask = ref<MixQueueItem | null>(null);
 let trackSeq = 1;
+let mixQueueSeq = 1;
 
 const trackLabelMap: Record<TrackType, string> = {
   video: "视频",
@@ -871,7 +885,7 @@ const collectMixInput = (type: TrackType): MixTrackInput | null => {
   return { path: file.path, kind: type, trackIds: selected, trackLangs };
 };
 
-const mixTracks = async () => {
+const enqueueMixTask = async () => {
   if (trackMixLoading.value) return;
   trackMixError.value = "";
   trackMixResult.value = "";
@@ -894,21 +908,70 @@ const mixTracks = async () => {
     if (audioInput) inputs.push(audioInput);
     if (subtitleInput) inputs.push(subtitleInput);
 
-    const output = await invoke<string>("mix_media_tracks", {
-      inputs: inputs.map((item) => ({
-        path: item.path,
-        kind: item.kind,
-        trackIds: item.trackIds,
-        trackLangs: item.trackLangs,
-      })),
+    mixQueue.value.push({
+      id: mixQueueSeq++,
+      createdAt: new Date().toLocaleString(),
       outputPath,
+      inputs,
+      status: "queued",
     });
-    trackMixResult.value = `合成完成：${output}`;
+    trackFiles.value = { video: [], audio: [], subtitle: [] };
+    trackInfos.value = { video: [], audio: [], subtitle: [] };
+    trackErrors.value = { video: "", audio: "", subtitle: "" };
+    trackProgress.value = { video: 0, audio: 0, subtitle: 0 };
+    trackMixResult.value = "已添加到混流任务队列";
   } catch (err: any) {
-    trackMixError.value = typeof err === "string" ? err : err?.message || "合成失败";
+    trackMixError.value = typeof err === "string" ? err : err?.message || "添加任务失败";
   } finally {
     trackMixLoading.value = false;
   }
+};
+
+const startMixQueue = async () => {
+  if (mixQueueRunning.value) return;
+  trackMixError.value = "";
+  trackMixResult.value = "";
+  const pending = mixQueue.value.some((item) => item.status === "queued");
+  if (!pending) {
+    trackMixResult.value = "当前没有待处理的混流任务";
+    return;
+  }
+
+  mixQueueRunning.value = true;
+  for (const item of mixQueue.value) {
+    if (item.status !== "queued") continue;
+    item.status = "running";
+    item.message = undefined;
+    try {
+      const output = await invoke<string>("mix_media_tracks", {
+        inputs: item.inputs.map((input) => ({
+          path: input.path,
+          kind: input.kind,
+          trackIds: input.trackIds,
+          trackLangs: input.trackLangs,
+        })),
+        outputPath: item.outputPath,
+      });
+      item.status = "success";
+      item.message = output;
+    } catch (err: any) {
+      item.status = "failed";
+      item.message = typeof err === "string" ? err : err?.message || "合成失败";
+    }
+  }
+  mixQueueRunning.value = false;
+};
+
+const clearMixQueue = () => {
+  if (mixQueueRunning.value) return;
+  mixQueue.value = [];
+  trackMixResult.value = "";
+  trackMixError.value = "";
+};
+
+const openMixTaskDetail = (item: MixQueueItem) => {
+  selectedMixTask.value = item;
+  mixQueueDetailVisible.value = true;
 };
 
 const isDownloadPaused = (item: DownloadItem) => {
@@ -2514,8 +2577,8 @@ watch(activePage, (next, prev) => {
       <div v-else-if="isTracksPage" class="app-body download-view">
         <NCard title="轨道工坊" size="small" class="download-card">
           <div class="tracks-mix-bar">
-            <NButton type="primary" size="small" :loading="trackMixLoading" @click="mixTracks">
-              重新混合为新视频
+            <NButton type="primary" size="small" :loading="trackMixLoading" @click="enqueueMixTask">
+              添加到混流任务队列
             </NButton>
             <span v-if="trackMixResult" class="tracks-mix-success">{{ trackMixResult }}</span>
             <span v-if="trackMixError" class="tracks-mix-error">{{ trackMixError }}</span>
@@ -2713,6 +2776,44 @@ watch(activePage, (next, prev) => {
                       <span class="tracks-info-meta">字符集 {{ info.charset || '-' }}</span>
                       <span class="tracks-info-meta">属性 {{ info.attributes || '-' }}</span>
                       <span class="tracks-info-meta">容器 {{ info.container || '-' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tracks-section">
+              <div class="tracks-header">
+                <span class="tracks-title">混流任务队列</span>
+                <div class="tracks-actions">
+                  <NButton size="small" secondary :disabled="mixQueueRunning" @click="startMixQueue">
+                    开始任务队列
+                  </NButton>
+                  <NButton size="small" secondary :disabled="mixQueueRunning || !mixQueue.length" @click="clearMixQueue">
+                    清除所有任务
+                  </NButton>
+                </div>
+              </div>
+              <div class="tracks-body">
+                <p v-if="!mixQueue.length" class="download-empty">暂无混流任务。</p>
+                <div v-else class="mix-queue-list">
+                  <div v-for="item in mixQueue" :key="item.id" class="mix-queue-row" @click.stop="openMixTaskDetail(item)">
+                    <span class="mix-queue-id">#{{ item.id }}</span>
+                    <span class="mix-queue-time">{{ item.createdAt }}</span>
+                    <span class="mix-queue-output" :title="item.outputPath">{{ item.outputPath }}</span>
+                    <span class="mix-queue-status" :data-status="item.status">
+                      {{
+                        item.status === 'queued'
+                          ? '排队中'
+                          : item.status === 'running'
+                            ? '处理中'
+                            : item.status === 'success'
+                              ? '完成'
+                              : '失败'
+                      }}
+                    </span>
+                    <div v-if="item.message" class="mix-queue-message-row" :title="item.message">
+                      {{ item.message }}
                     </div>
                   </div>
                 </div>
@@ -2931,6 +3032,69 @@ watch(activePage, (next, prev) => {
           <NButton size="small" type="primary" :disabled="aliasLoading || !aliasSelected.length" @click="confirmAliasSelection">
             确定
           </NButton>
+        </div>
+      </div>
+    </NModal>
+
+    <NModal v-model:show="mixQueueDetailVisible" preset="card" title="混流任务详情" style="width: min(720px, 92vw)">
+      <div v-if="selectedMixTask" class="mix-queue-detail">
+        <div class="mix-queue-detail-row">
+          <span class="mix-queue-detail-label">任务 ID</span>
+          <span>#{{ selectedMixTask.id }}</span>
+        </div>
+        <div class="mix-queue-detail-row">
+          <span class="mix-queue-detail-label">创建时间</span>
+          <span>{{ selectedMixTask.createdAt }}</span>
+        </div>
+        <div class="mix-queue-detail-row">
+          <span class="mix-queue-detail-label">输出路径</span>
+          <span class="mix-queue-detail-value" :title="selectedMixTask.outputPath">
+            {{ selectedMixTask.outputPath }}
+          </span>
+        </div>
+        <div class="mix-queue-detail-row">
+          <span class="mix-queue-detail-label">状态</span>
+          <span>{{
+            selectedMixTask.status === 'queued'
+              ? '排队中'
+              : selectedMixTask.status === 'running'
+                ? '处理中'
+                : selectedMixTask.status === 'success'
+                  ? '完成'
+                  : '失败'
+          }}</span>
+        </div>
+        <div v-if="selectedMixTask.message" class="mix-queue-detail-row">
+          <span class="mix-queue-detail-label">消息</span>
+          <span class="mix-queue-detail-value" :title="selectedMixTask.message">
+            {{ selectedMixTask.message }}
+          </span>
+        </div>
+
+        <div class="mix-queue-detail-section">轨道输入</div>
+        <div v-for="(input, index) in selectedMixTask.inputs" :key="`${input.kind}-${index}`" class="mix-queue-detail-block">
+          <div class="mix-queue-detail-row">
+            <span class="mix-queue-detail-label">类型</span>
+            <span>{{ input.kind === 'video' ? '视频' : input.kind === 'audio' ? '音频' : '字幕' }}</span>
+          </div>
+          <div class="mix-queue-detail-row">
+            <span class="mix-queue-detail-label">来源文件</span>
+            <span class="mix-queue-detail-value" :title="input.path">{{ input.path }}</span>
+          </div>
+          <div class="mix-queue-detail-row">
+            <span class="mix-queue-detail-label">轨道 ID</span>
+            <span>{{ input.trackIds.join(', ') || '-' }}</span>
+          </div>
+          <div class="mix-queue-detail-row">
+            <span class="mix-queue-detail-label">语言设置</span>
+            <span class="mix-queue-detail-value">
+              {{
+                input.trackIds
+                  .map((id) => `${id}:${input.trackLangs?.[id] || '-'}`)
+                  .join('、') || '-'
+              }}
+            </span>
+          </div>
         </div>
       </div>
     </NModal>
