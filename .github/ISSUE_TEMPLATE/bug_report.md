@@ -1,38 +1,36 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
+name: 缺陷反馈
+about: 报告一个可复现的问题
+title: "[Bug] "
+labels: bug
+assignees: ""
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**问题描述**
+请简要说明出现了什么问题。
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**复现步骤**
+1. 
+2. 
+3. 
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**期望结果**
+你期望看到的正确行为。
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**实际结果**
+实际发生的行为与错误提示。
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**环境信息（必填）**
+- 操作系统：Windows 版本 / Linux 发行版（例如 Windows 11 23H2）
+- 应用版本：例如 v0.1.0（或 Git commit）
+- 安装方式：本地构建 / 打包版
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**日志/错误信息（可选）**
+请粘贴相关报错、控制台输出或 mkvmerge/ffmpeg 相关日志。
 
-**Additional context**
-Add any other context about the problem here.
+**截图/录屏（可选）**
+如有界面问题请提供截图或录屏。
+
+**补充说明**
+其他你认为有帮助的上下文信息。
