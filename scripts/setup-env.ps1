@@ -136,6 +136,127 @@ function Install-ProjectDependencies {
     }
 }
 
+# Install bundled FFmpeg tools (ffmpeg/ffprobe)
+function Install-FFmpegTools {
+    Write-Host "[CHECK] FFmpeg tools (ffmpeg/ffprobe) ..." -ForegroundColor Yellow
+
+    $projectRoot = Split-Path -Parent $PSScriptRoot
+    $binDir = Join-Path $projectRoot "src-tauri\bin"
+    $ffmpegExe = Join-Path $binDir "ffmpeg.exe"
+    $ffprobeExe = Join-Path $binDir "ffprobe.exe"
+
+    if ((Test-Path $ffmpegExe) -and (Test-Path $ffprobeExe)) {
+        Write-Host "[OK] 内置 FFmpeg 已存在" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "[INSTALL] 下载内置 FFmpeg ..." -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+    $tempDir = Join-Path $env:TEMP "hanamirip-ffmpeg"
+    if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+    $zipPath = Join-Path $tempDir "ffmpeg.zip"
+    $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+
+        $extracted = Get-ChildItem -Path $tempDir -Directory | Where-Object { $_.Name -like "ffmpeg-*" } | Select-Object -First 1
+        if (-not $extracted) { throw "FFmpeg zip 解压失败" }
+
+        Copy-Item (Join-Path $extracted.FullName "bin\ffmpeg.exe") -Destination $ffmpegExe -Force
+        Copy-Item (Join-Path $extracted.FullName "bin\ffprobe.exe") -Destination $ffprobeExe -Force
+
+        Write-Host "[OK] 内置 FFmpeg 下载完成" -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] 下载 FFmpeg 失败: $_" -ForegroundColor Red
+        Write-Host "请手动下载并放入 src-tauri\\bin" -ForegroundColor Yellow
+        Write-Host "下载地址：$url" -ForegroundColor Yellow
+    } finally {
+        if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+    }
+}
+
+function Install-MkvToolNixTools {
+    Write-Host "[CHECK] MKVToolNix tools (mkvmerge/mkvinfo) ..." -ForegroundColor Yellow
+
+    $projectRoot = Split-Path -Parent $PSScriptRoot
+    $binDir = Join-Path $projectRoot "src-tauri\bin"
+    $mkvmergeExe = Join-Path $binDir "mkvmerge.exe"
+    $mkvinfoExe = Join-Path $binDir "mkvinfo.exe"
+
+    if ((Test-Path $mkvmergeExe) -and (Test-Path $mkvinfoExe)) {
+        Write-Host "[OK] 内置 MKVToolNix 已存在" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "[INSTALL] 下载内置 MKVToolNix ..." -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+    $tempDir = Join-Path $env:TEMP "hanamirip-mkvtoolnix"
+    if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+    $zipPath = Join-Path $tempDir "mkvtoolnix.zip"
+    $indexUrl = "https://mkvtoolnix.download/windows/releases/"
+    $url = $null
+    try {
+        $index = Invoke-WebRequest -Uri $indexUrl -UseBasicParsing
+        $versions = @()
+        foreach ($link in $index.Links) {
+            if ($link.href -match "/windows/releases/([0-9]+(\.[0-9]+)*)/") {
+                $versions += $matches[1]
+            }
+        }
+
+        if ($versions.Count -eq 0) { throw "无法解析 MKVToolNix 版本列表" }
+
+        $latest = $versions | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+        $baseUrl = "https://mkvtoolnix.download/windows/releases/$latest/"
+        $candidates = @(
+            "mkvtoolnix-64-bit-$latest.zip",
+            "mkvtoolnix-64-bit-$latest.0.zip",
+            "mkvtoolnix-64-bit-$latest.0.0.zip"
+        )
+
+        foreach ($name in $candidates) {
+            $candidateUrl = $baseUrl + $name
+            try {
+                Invoke-WebRequest -Uri $candidateUrl -OutFile $zipPath -UseBasicParsing
+                $url = $candidateUrl
+                break
+            } catch {
+                $url = $null
+            }
+        }
+
+        if (-not $url) { throw "未找到可用的 MKVToolNix zip 包" }
+
+        Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+
+        $mkvmergeFound = Get-ChildItem -Path $tempDir -Recurse -Filter "mkvmerge.exe" | Select-Object -First 1
+        $mkvinfoFound = Get-ChildItem -Path $tempDir -Recurse -Filter "mkvinfo.exe" | Select-Object -First 1
+        if (-not $mkvmergeFound -or -not $mkvinfoFound) { throw "MKVToolNix zip 解压失败" }
+
+        Copy-Item $mkvmergeFound.FullName -Destination $mkvmergeExe -Force
+        Copy-Item $mkvinfoFound.FullName -Destination $mkvinfoExe -Force
+
+        Write-Host "[OK] 内置 MKVToolNix 下载完成" -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] 下载 MKVToolNix 失败: $_" -ForegroundColor Red
+        Write-Host "请手动下载并放入 src-tauri\\bin" -ForegroundColor Yellow
+        if ($url) {
+            Write-Host "下载地址：$url" -ForegroundColor Yellow
+        } else {
+            Write-Host "下载列表：$indexUrl" -ForegroundColor Yellow
+        }
+    } finally {
+        if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
+    }
+}
+
 # Generate icon files
 function Generate-Icons {
     Write-Host "[CHECK] Application icons ..." -ForegroundColor Yellow
@@ -177,6 +298,8 @@ function Main {
     Install-Yarn
     Install-Rust
     Install-ProjectDependencies
+    Install-FFmpegTools
+    Install-MkvToolNixTools
     Generate-Icons
     
     Write-Host ""

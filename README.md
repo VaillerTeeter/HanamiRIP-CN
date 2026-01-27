@@ -26,6 +26,12 @@
 - 下载页支持单条暂停/继续/删除与“全部暂停/全部继续”，并显示总下载/上传速率。
 - 下载速度受种子健康度与网络环境影响，做种越多通常速度越快。
 
+## 轨道工坊（轨道解析/混合）
+- 入口：顶部导航“轨道工坊”。
+- 轨道检测：分别为视频/音频/字幕添加文件后点击“检测”，会解析轨道信息并支持勾选需要的轨道。
+- 默认语言：在“重新混合为新视频”按钮下方可设置视频/音频/字幕的默认语言，合成时会写入对应轨道语言属性。
+- 合成流程：会先将选中的视频、音频、字幕轨道分别导出为临时文件，再合并为新的 MKV 文件。
+
 ## 目录结构（关键）
 - 前端：见 [src/main.ts](src/main.ts)、[src/App.vue](src/App.vue)、[vite.config.ts](vite.config.ts)
 - 样式：见 [src/style.css](src/style.css)
@@ -50,8 +56,8 @@
 .\scripts\setup-env.ps1
 ```
 
-### Linux 环境
-- Linux（已在 WSL/Ubuntu 环境验证）
+### Linux 环境（Ubuntu）
+- Ubuntu（已在 WSL/Ubuntu 环境验证）
 - 系统依赖（GTK/WebKit 等，脚本会安装）：`build-essential`、`pkg-config`、`libgtk-3-dev`、`libwebkit2gtk-4.1-dev`、`librsvg2-dev`、`libssl-dev`、`curl`、`ca-certificates`
 - Node.js 24 + Yarn（通过 corepack 管理）
 - Rust 工具链（stable）
@@ -61,6 +67,10 @@
 ```bash
 ./scripts/setup-env.sh
 ```
+
+## 内置 FFmpeg/MKVToolNix 工具（轨道解析/分离/合成）
+- Windows 与 Ubuntu 会在环境脚本中自动下载并放入 [src-tauri/bin](src-tauri/bin)。
+- 若需手动放置，请将 ffmpeg/ffprobe/mkvmerge/mkvinfo 放到该目录中（Windows 为 .exe）。
 
 ## 开发与构建
 

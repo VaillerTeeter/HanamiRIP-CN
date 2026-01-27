@@ -325,6 +325,173 @@ body {
   z-index: 1;
 }
 
+.tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tracks-mix-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.tracks-mix-lang {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 0 4px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.tracks-mix-lang-label {
+  font-weight: 600;
+  color: #111827;
+}
+
+.tracks-mix-lang-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: #eef2ff;
+  border-radius: 999px;
+  writing-mode: horizontal-tb;
+  white-space: nowrap;
+}
+
+.tracks-mix-lang-item .n-select {
+  min-width: 120px;
+}
+
+.tracks-mix-error {
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.tracks-mix-success {
+  font-size: 12px;
+  color: #15803d;
+}
+
+.tracks-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tracks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tracks-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+.tracks-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.tracks-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tracks-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracks-file {
+  display: grid;
+  grid-template-columns: 140px 90px 1fr;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tracks-file-name {
+  font-weight: 600;
+  color: #374151;
+}
+
+.tracks-file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.tracks-file-size {
+  text-align: right;
+  color: #6b7280;
+}
+
+.tracks-progress {
+  padding: 4px 0;
+}
+
+.tracks-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracks-info-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tracks-info-file {
+  font-weight: 600;
+  color: #374151;
+  font-size: 12px;
+}
+
+.tracks-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tracks-info-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.tracks-info-meta {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.tracks-error {
+  font-size: 12px;
+  color: #b91c1c;
+}
+
 .icon-button {
   min-width: 24px;
   padding: 0 6px;

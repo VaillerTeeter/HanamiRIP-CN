@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   NButton,
@@ -75,7 +75,7 @@ interface SeasonResponse {
 const isDark = ref(false);
 const theme = computed(() => (isDark.value ? darkTheme : null));
 
-type PageKey = "query" | "watching" | "backlog" | "finished" | "search" | "download";
+type PageKey = "query" | "watching" | "backlog" | "finished" | "search" | "download" | "tracks";
 const activePage = ref<PageKey>("query");
 const isQueryPage = computed(() => activePage.value === "query");
 const isWatchingPage = computed(() => activePage.value === "watching");
@@ -83,6 +83,7 @@ const isBacklogPage = computed(() => activePage.value === "backlog");
 const isFinishedPage = computed(() => activePage.value === "finished");
 const isSearchPage = computed(() => activePage.value === "search");
 const isDownloadPage = computed(() => activePage.value === "download");
+const isTracksPage = computed(() => activePage.value === "tracks");
 const switchPage = (page: PageKey) => {
   activePage.value = page;
 };
@@ -666,6 +667,248 @@ const downloadDisplayTitle = (item: DownloadItem) => {
   if (item.status === "paused") return `${item.title}.paused`;
   if (item.status === "failed") return `${item.title}.failed`;
   return `${item.title}.downloading`;
+};
+
+type TrackType = "video" | "audio" | "subtitle";
+type TrackItem = {
+  id: number;
+  name: string;
+  path: string;
+  fileSize?: string;
+};
+type TrackInfo = {
+  trackId: string;
+  codec: string;
+  lang?: string;
+  languageName?: string;
+  trackName?: string;
+  isDefault?: boolean;
+  isForced?: boolean;
+  charset?: string;
+  attributes?: string;
+  container?: string;
+  fileSize?: string;
+  selected?: boolean;
+  langOverride?: string;
+};
+type TrackFileResult = {
+  file: TrackItem;
+  tracks: TrackInfo[];
+};
+type MixTrackInput = {
+  path: string;
+  kind: TrackType;
+  trackIds: string[];
+  trackLangs?: Record<string, string>;
+};
+
+const trackFiles = ref<Record<TrackType, TrackItem[]>>({
+  video: [],
+  audio: [],
+  subtitle: [],
+});
+const trackInfos = ref<Record<TrackType, TrackFileResult[]>>({
+  video: [],
+  audio: [],
+  subtitle: [],
+});
+const trackLoading = ref<Record<TrackType, boolean>>({
+  video: false,
+  audio: false,
+  subtitle: false,
+});
+const trackProgress = ref<Record<TrackType, number>>({
+  video: 0,
+  audio: 0,
+  subtitle: 0,
+});
+const trackErrors = ref<Record<TrackType, string>>({
+  video: "",
+  audio: "",
+  subtitle: "",
+});
+const trackMixLoading = ref(false);
+const trackMixError = ref("");
+const trackMixResult = ref("");
+let trackSeq = 1;
+
+const trackLabelMap: Record<TrackType, string> = {
+  video: "视频",
+  audio: "音频",
+  subtitle: "字幕",
+};
+
+const trackLangDefaults = reactive<Record<TrackType, string>>({
+  video: "ja",
+  audio: "ja",
+  subtitle: "zh-Hans",
+});
+
+const trackLanguageOptions = [
+  { label: "自动", value: "" },
+  { label: "日语 (ja)", value: "ja" },
+  { label: "英语 (en)", value: "en" },
+  { label: "简体中文 (zh-Hans)", value: "zh-Hans" },
+  { label: "繁体中文 (zh-Hant)", value: "zh-Hant" },
+  { label: "中文 (zh)", value: "zh" },
+  { label: "韩语 (ko)", value: "ko" },
+  { label: "法语 (fr)", value: "fr" },
+  { label: "德语 (de)", value: "de" },
+  { label: "西班牙语 (es)", value: "es" },
+  { label: "未知 (und)", value: "und" },
+];
+
+const addTrackFile = async (type: TrackType) => {
+  try {
+    const videoExt = ["mkv", "mp4", "avi", "mov", "ts", "m2ts", "webm", "mpg", "mpeg"];
+    const subtitleExt = ["srt", "ass", "ssa", "vtt", "sup", "sub"];
+    const extMap: Record<TrackType, string[]> = {
+      video: videoExt,
+      audio: videoExt,
+      subtitle: [...videoExt, ...subtitleExt],
+    };
+    const result = await openDialog({
+      title: `选择${trackLabelMap[type]}文件`,
+      directory: false,
+      multiple: false,
+      filters: [{ name: `${trackLabelMap[type]}文件`, extensions: extMap[type] }],
+    });
+    if (!result || Array.isArray(result)) return;
+    const file = String(result);
+    let fileSize: string | undefined;
+    try {
+      const size = await invoke<string | null>("get_media_file_size", { path: file });
+      fileSize = size ?? undefined;
+    } catch (err) {
+      console.error("get_media_file_size failed", err);
+      fileSize = undefined;
+    }
+    trackFiles.value[type] = [
+      {
+        id: trackSeq++,
+        name: file.split(/[\\/]/).filter(Boolean).pop() || file,
+        path: file,
+        fileSize,
+      },
+    ];
+    trackInfos.value[type] = [];
+    trackErrors.value[type] = "";
+    trackProgress.value[type] = 0;
+  } catch (err) {
+    console.error("openDialog failed", err);
+  }
+};
+
+const detectTracks = async (type: TrackType) => {
+  if (trackLoading.value[type]) return;
+  if (!trackFiles.value[type].length) {
+    trackErrors.value[type] = `请先添加${trackLabelMap[type]}文件`;
+    trackInfos.value[type] = [];
+    trackProgress.value[type] = 0;
+    return;
+  }
+  trackLoading.value[type] = true;
+  trackProgress.value[type] = 0;
+  trackInfos.value[type] = [];
+  trackErrors.value[type] = "";
+
+  const files = trackFiles.value[type];
+  const totalFiles = files.length;
+  const results: TrackFileResult[] = [];
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    try {
+      const response = await invoke<{ tracks: TrackInfo[] }>("parse_media_tracks", {
+        path: file.path,
+        kind: type,
+      });
+      const tracks = (response.tracks || []).map((track) => ({
+        ...track,
+        selected: track.selected ?? true,
+        langOverride: track.lang || trackLangDefaults[type],
+      }));
+      results.push({ file, tracks });
+    } catch (err: any) {
+      trackErrors.value[type] = typeof err === "string" ? err : err?.message || "解析失败";
+      results.push({ file, tracks: [] });
+    } finally {
+      trackProgress.value[type] = Math.round(((i + 1) / totalFiles) * 100);
+    }
+  }
+  trackInfos.value[type] = results;
+  trackLoading.value[type] = false;
+};
+
+const pickOutputPath = async (baseFile?: TrackItem) => {
+  const baseName = baseFile?.name ? baseFile.name.replace(/\.[^/.\\]+$/, "") : "mixed";
+  const dir = baseFile?.path ? baseFile.path.replace(/[\\/][^\\/]+$/, "") : "";
+  const defaultPath = dir ? `${dir}\\${baseName}_mixed.mkv` : `${baseName}_mixed.mkv`;
+  const result = await saveDialog({
+    title: "保存混合后的视频",
+    defaultPath,
+    filters: [{ name: "MKV", extensions: ["mkv"] }],
+  });
+  if (!result) return null;
+  return result.endsWith(".mkv") ? result : `${result}.mkv`;
+};
+
+const collectMixInput = (type: TrackType): MixTrackInput | null => {
+  const files = trackFiles.value[type];
+  if (!files.length) return null;
+  const file = files[0];
+  const group = trackInfos.value[type].find((item) => item.file.id === file.id);
+  if (!group || !group.tracks.length) return null;
+  const selected = group.tracks.filter((track) => track.selected !== false).map((track) => track.trackId);
+  if (!selected.length) return null;
+  const trackLangs: Record<string, string> = {};
+  group.tracks.forEach((track) => {
+    if (track.selected === false) return;
+    const lang = trackLangDefaults[type];
+    if (lang) {
+      trackLangs[track.trackId] = lang;
+    }
+  });
+  return { path: file.path, kind: type, trackIds: selected, trackLangs };
+};
+
+const mixTracks = async () => {
+  if (trackMixLoading.value) return;
+  trackMixError.value = "";
+  trackMixResult.value = "";
+
+  const videoInput = collectMixInput("video");
+  const audioInput = collectMixInput("audio");
+  const subtitleInput = collectMixInput("subtitle");
+
+  if (!videoInput) {
+    trackMixError.value = "请先检测并选择至少一个视频轨道";
+    return;
+  }
+
+  trackMixLoading.value = true;
+  try {
+    const outputPath = await pickOutputPath(trackFiles.value.video[0]);
+    if (!outputPath) return;
+
+    const inputs: MixTrackInput[] = [videoInput];
+    if (audioInput) inputs.push(audioInput);
+    if (subtitleInput) inputs.push(subtitleInput);
+
+    const output = await invoke<string>("mix_media_tracks", {
+      inputs: inputs.map((item) => ({
+        path: item.path,
+        kind: item.kind,
+        trackIds: item.trackIds,
+        trackLangs: item.trackLangs,
+      })),
+      outputPath,
+    });
+    trackMixResult.value = `合成完成：${output}`;
+  } catch (err: any) {
+    trackMixError.value = typeof err === "string" ? err : err?.message || "合成失败";
+  } finally {
+    trackMixLoading.value = false;
+  }
 };
 
 const isDownloadPaused = (item: DownloadItem) => {
@@ -1707,6 +1950,14 @@ watch(activePage, (next, prev) => {
             >
               下载
             </NButton>
+            <NButton
+              secondary
+              :type="isTracksPage ? 'primary' : 'default'"
+              :data-tauri-drag-region="false"
+              @click="switchPage('tracks')"
+            >
+              轨道工坊
+            </NButton>
           </div>
         </div>
         <div class="titlebar-actions" aria-label="window actions" data-tauri-drag-region="false">
@@ -2257,6 +2508,217 @@ watch(activePage, (next, prev) => {
             </div>
           </div>
           <p v-else class="download-empty">暂无下载记录。</p>
+        </NCard>
+      </div>
+
+      <div v-else-if="isTracksPage" class="app-body download-view">
+        <NCard title="轨道工坊" size="small" class="download-card">
+          <div class="tracks-mix-bar">
+            <NButton type="primary" size="small" :loading="trackMixLoading" @click="mixTracks">
+              重新混合为新视频
+            </NButton>
+            <span v-if="trackMixResult" class="tracks-mix-success">{{ trackMixResult }}</span>
+            <span v-if="trackMixError" class="tracks-mix-error">{{ trackMixError }}</span>
+          </div>
+          <div class="tracks-mix-lang">
+            <span class="tracks-mix-lang-label">默认语言</span>
+            <div class="tracks-mix-lang-item">
+              <span>视频</span>
+              <NSelect
+                v-model:value="trackLangDefaults.video"
+                size="small"
+                :options="trackLanguageOptions"
+                filterable
+                tag
+                placeholder="语言"
+              />
+            </div>
+            <div class="tracks-mix-lang-item">
+              <span>音频</span>
+              <NSelect
+                v-model:value="trackLangDefaults.audio"
+                size="small"
+                :options="trackLanguageOptions"
+                filterable
+                tag
+                placeholder="语言"
+              />
+            </div>
+            <div class="tracks-mix-lang-item">
+              <span>字幕</span>
+              <NSelect
+                v-model:value="trackLangDefaults.subtitle"
+                size="small"
+                :options="trackLanguageOptions"
+                filterable
+                tag
+                placeholder="语言"
+              />
+            </div>
+          </div>
+          <div class="tracks-list">
+            <div class="tracks-section">
+              <div class="tracks-header">
+                <span class="tracks-title">视频</span>
+                <div class="tracks-actions">
+                  <NButton size="small" secondary @click="addTrackFile('video')">添加文件</NButton>
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="trackLoading.video"
+                    :disabled="!trackFiles.video.length"
+                    @click="detectTracks('video')"
+                  >
+                    检测
+                  </NButton>
+                </div>
+              </div>
+              <div class="tracks-body">
+                <div class="tracks-files" v-if="trackFiles.video.length">
+                  <div v-for="file in trackFiles.video" :key="file.id" class="tracks-file">
+                    <span class="tracks-file-name">{{ file.name }}</span>
+                    <span class="tracks-file-size">{{ file.fileSize || '-' }}</span>
+                    <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
+                  </div>
+                </div>
+                <p v-else class="download-empty">尚未添加视频文件。</p>
+                <div v-if="trackErrors.video" class="tracks-error">{{ trackErrors.video }}</div>
+                <div v-if="trackLoading.video" class="tracks-progress">
+                  <NProgress type="line" :percentage="trackProgress.video" :show-indicator="true" :height="8" />
+                </div>
+                <div v-if="trackInfos.video.length" class="tracks-info">
+                  <div v-for="group in trackInfos.video" :key="group.file.id" class="tracks-info-group">
+                    <div class="tracks-info-file">{{ group.file.name }}</div>
+                    <div v-for="info in group.tracks" :key="info.trackId" class="tracks-info-row">
+                      <NCheckbox v-model:checked="info.selected" size="small" />
+                      <span class="tracks-info-name">轨道 {{ info.trackId || '-' }}</span>
+                      <span class="tracks-info-meta">编码 {{ info.codec || '-' }}</span>
+                      <span class="tracks-info-meta">语言 {{ info.lang || '-' }}</span>
+                      <span class="tracks-info-meta">语言名称 {{ info.languageName || '-' }}</span>
+                      <span class="tracks-info-meta">名称 {{ info.trackName || '-' }}</span>
+                      <span class="tracks-info-meta">
+                        默认 {{ info.isDefault === true ? '是' : info.isDefault === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">
+                        强制 {{ info.isForced === true ? '是' : info.isForced === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">字符集 {{ info.charset || '-' }}</span>
+                      <span class="tracks-info-meta">属性 {{ info.attributes || '-' }}</span>
+                      <span class="tracks-info-meta">容器 {{ info.container || '-' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tracks-section">
+              <div class="tracks-header">
+                <span class="tracks-title">音频</span>
+                <div class="tracks-actions">
+                  <NButton size="small" secondary @click="addTrackFile('audio')">添加文件</NButton>
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="trackLoading.audio"
+                    :disabled="!trackFiles.audio.length"
+                    @click="detectTracks('audio')"
+                  >
+                    检测
+                  </NButton>
+                </div>
+              </div>
+              <div class="tracks-body">
+                <div class="tracks-files" v-if="trackFiles.audio.length">
+                  <div v-for="file in trackFiles.audio" :key="file.id" class="tracks-file">
+                    <span class="tracks-file-name">{{ file.name }}</span>
+                    <span class="tracks-file-size">{{ file.fileSize || '-' }}</span>
+                    <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
+                  </div>
+                </div>
+                <p v-else class="download-empty">尚未添加音频文件。</p>
+                <div v-if="trackErrors.audio" class="tracks-error">{{ trackErrors.audio }}</div>
+                <div v-if="trackLoading.audio" class="tracks-progress">
+                  <NProgress type="line" :percentage="trackProgress.audio" :show-indicator="true" :height="8" />
+                </div>
+                <div v-if="trackInfos.audio.length" class="tracks-info">
+                  <div v-for="group in trackInfos.audio" :key="group.file.id" class="tracks-info-group">
+                    <div class="tracks-info-file">{{ group.file.name }}</div>
+                    <div v-for="info in group.tracks" :key="info.trackId" class="tracks-info-row">
+                      <NCheckbox v-model:checked="info.selected" size="small" />
+                      <span class="tracks-info-name">轨道 {{ info.trackId || '-' }}</span>
+                      <span class="tracks-info-meta">编码 {{ info.codec || '-' }}</span>
+                      <span class="tracks-info-meta">语言 {{ info.lang || '-' }}</span>
+                      <span class="tracks-info-meta">语言名称 {{ info.languageName || '-' }}</span>
+                      <span class="tracks-info-meta">名称 {{ info.trackName || '-' }}</span>
+                      <span class="tracks-info-meta">
+                        默认 {{ info.isDefault === true ? '是' : info.isDefault === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">
+                        强制 {{ info.isForced === true ? '是' : info.isForced === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">字符集 {{ info.charset || '-' }}</span>
+                      <span class="tracks-info-meta">属性 {{ info.attributes || '-' }}</span>
+                      <span class="tracks-info-meta">容器 {{ info.container || '-' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tracks-section">
+              <div class="tracks-header">
+                <span class="tracks-title">字幕</span>
+                <div class="tracks-actions">
+                  <NButton size="small" secondary @click="addTrackFile('subtitle')">添加文件</NButton>
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="trackLoading.subtitle"
+                    :disabled="!trackFiles.subtitle.length"
+                    @click="detectTracks('subtitle')"
+                  >
+                    检测
+                  </NButton>
+                </div>
+              </div>
+              <div class="tracks-body">
+                <div class="tracks-files" v-if="trackFiles.subtitle.length">
+                  <div v-for="file in trackFiles.subtitle" :key="file.id" class="tracks-file">
+                    <span class="tracks-file-name">{{ file.name }}</span>
+                    <span class="tracks-file-size">{{ file.fileSize || '-' }}</span>
+                    <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
+                  </div>
+                </div>
+                <p v-else class="download-empty">尚未添加字幕文件。</p>
+                <div v-if="trackErrors.subtitle" class="tracks-error">{{ trackErrors.subtitle }}</div>
+                <div v-if="trackLoading.subtitle" class="tracks-progress">
+                  <NProgress type="line" :percentage="trackProgress.subtitle" :show-indicator="true" :height="8" />
+                </div>
+                <div v-if="trackInfos.subtitle.length" class="tracks-info">
+                  <div v-for="group in trackInfos.subtitle" :key="group.file.id" class="tracks-info-group">
+                    <div class="tracks-info-file">{{ group.file.name }}</div>
+                    <div v-for="info in group.tracks" :key="info.trackId" class="tracks-info-row">
+                      <NCheckbox v-model:checked="info.selected" size="small" />
+                      <span class="tracks-info-name">轨道 {{ info.trackId || '-' }}</span>
+                      <span class="tracks-info-meta">编码 {{ info.codec || '-' }}</span>
+                      <span class="tracks-info-meta">语言 {{ info.lang || '-' }}</span>
+                      <span class="tracks-info-meta">语言名称 {{ info.languageName || '-' }}</span>
+                      <span class="tracks-info-meta">名称 {{ info.trackName || '-' }}</span>
+                      <span class="tracks-info-meta">
+                        默认 {{ info.isDefault === true ? '是' : info.isDefault === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">
+                        强制 {{ info.isForced === true ? '是' : info.isForced === false ? '否' : '-' }}
+                      </span>
+                      <span class="tracks-info-meta">字符集 {{ info.charset || '-' }}</span>
+                      <span class="tracks-info-meta">属性 {{ info.attributes || '-' }}</span>
+                      <span class="tracks-info-meta">容器 {{ info.container || '-' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </NCard>
       </div>
 
