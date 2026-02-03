@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 install_apt_deps() {
-  echo "[STEP] 安装系统依赖 (apt) ..."
+  echo "[INSTALL] 安装系统依赖 (apt) ..."
   sudo apt-get update
   sudo apt-get install -y \
     build-essential \
@@ -18,58 +18,75 @@ install_apt_deps() {
 }
 
 install_node() {
+  echo "[CHECK] Node.js ..."
   if command -v node >/dev/null 2>&1; then
     local version major
     version="$(node -v | sed 's/^v//')"
     major="${version%%.*}"
     if [[ "$major" == "24" ]]; then
-      echo "[OK] Node $version 已安装。"
+      echo "[OK] Node.js $version installed."
       return
     fi
   fi
 
-  echo "[STEP] 安装 Node.js 24 ..."
+  echo "[INSTALL] Node.js 24 ..."
   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
   sudo apt-get install -y nodejs
 }
 
 install_yarn() {
+  echo "[CHECK] Yarn ..."
   if command -v yarn >/dev/null 2>&1; then
-    echo "[OK] yarn 已安装。"
+    echo "[OK] Yarn $(yarn -v) installed."
     return
   fi
 
-  echo "[STEP] 安装 yarn (corepack) ..."
+  echo "[INSTALL] Yarn (corepack) ..."
   corepack enable
   corepack prepare yarn@1.22.22 --activate
 }
 
 install_rust() {
+  echo "[CHECK] Rust ..."
   if command -v cargo >/dev/null 2>&1; then
-    echo "[OK] Cargo 已安装。"
+    echo "[OK] Rust $(rustc -v 2>/dev/null | head -n1) installed."
     return
   fi
 
-  echo "[STEP] 安装 Rust 工具链 ..."
+  echo "[INSTALL] Rust toolchain ..."
   curl https://sh.rustup.rs -sSf | sh -s -- -y
   # shellcheck disable=SC1090
   . "$HOME/.cargo/env"
 }
 
+# Ensure Rust linker (gcc) for building baidu_verify on Linux (build-essential from apt_deps)
+ensure_rust_linker() {
+  echo "[CHECK] Rust linker (gcc) for Baidu plugin ..."
+  if command -v gcc >/dev/null 2>&1 || command -v cc >/dev/null 2>&1; then
+    echo "[OK] Linker (gcc/cc) found."
+    return
+  fi
+  echo "[ERROR] gcc/cc not found. Baidu translate plugin will not build. Install build-essential and run this script again." >&2
+  echo "  sudo apt-get install -y build-essential" >&2
+  echo "Setup will continue; other steps are not affected." >&2
+}
+
 install_ffmpeg_tools() {
-  echo "[STEP] 安装内置 FFmpeg (ffmpeg/ffprobe) ..."
+  echo "[CHECK] FFmpeg tools (ffmpeg/ffprobe) ..."
   local bin_dir="$PROJECT_ROOT/src-tauri/bin"
   mkdir -p "$bin_dir"
 
   if [[ -x "$bin_dir/ffmpeg" && -x "$bin_dir/ffprobe" ]]; then
-    echo "[OK] 内置 FFmpeg 已存在。"
+    echo "[OK] FFmpeg already exists."
     return
   fi
+
+  echo "[INSTALL] Download FFmpeg ..."
 
   local temp_dir
   temp_dir="$(mktemp -d)"
   local url="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
-  echo "[INFO] 下载: $url"
+  echo "[INFO] Download: $url"
   curl -fsSL "$url" -o "$temp_dir/ffmpeg.tar.xz"
   tar -xf "$temp_dir/ffmpeg.tar.xz" -C "$temp_dir"
   local extracted
@@ -83,18 +100,20 @@ install_ffmpeg_tools() {
   cp "$extracted/ffprobe" "$bin_dir/ffprobe"
   chmod +x "$bin_dir/ffmpeg" "$bin_dir/ffprobe"
   rm -rf "$temp_dir"
-  echo "[OK] 内置 FFmpeg 下载完成。"
+  echo "[OK] FFmpeg download done."
 }
 
 install_mkvtoolnix_tools() {
-  echo "[STEP] 安装内置 MKVToolNix (mkvmerge/mkvinfo) ..."
+  echo "[CHECK] MKVToolNix tools (mkvmerge/mkvinfo) ..."
   local bin_dir="$PROJECT_ROOT/src-tauri/bin"
   mkdir -p "$bin_dir"
 
   if [[ -x "$bin_dir/mkvmerge" && -x "$bin_dir/mkvinfo" ]]; then
-    echo "[OK] 内置 MKVToolNix 已存在。"
+    echo "[OK] MKVToolNix already exists."
     return
   fi
+
+  echo "[INSTALL] Download MKVToolNix ..."
 
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -126,7 +145,7 @@ install_mkvtoolnix_tools() {
     exit 1
   fi
 
-  echo "[INFO] 下载: $url"
+  echo "[INFO] Download: $url"
   chmod +x "$appimage"
 
   "$appimage" --appimage-extract >/dev/null
@@ -140,21 +159,34 @@ install_mkvtoolnix_tools() {
   cp "squashfs-root/usr/bin/mkvinfo" "$bin_dir/mkvinfo"
   chmod +x "$bin_dir/mkvmerge" "$bin_dir/mkvinfo"
   rm -rf "$temp_dir" "squashfs-root"
-  echo "[OK] 内置 MKVToolNix 下载完成。"
+  echo "[OK] MKVToolNix download done."
 }
 
 main() {
+  echo ""
+  echo "=== HanamiRIP-CN Linux Environment Setup ==="
+  echo ""
   install_apt_deps
   install_node
   install_yarn
   install_rust
+  ensure_rust_linker
   install_ffmpeg_tools
   install_mkvtoolnix_tools
 
-  echo "[STEP] 安装项目依赖 ..."
+  echo "[INSTALL] Project dependencies ..."
   cd "$PROJECT_ROOT"
   yarn install
-  echo "[OK] 环境与依赖安装完成。"
+  echo ""
+  echo "=== Environment Setup Complete! ==="
+  echo ""
+  echo "Available commands:"
+  echo "  yarn tauri dev    # Start Tauri desktop app in dev mode"
+  echo "  yarn dev          # Start Vite frontend server only"
+  echo "  yarn build        # Build desktop application"
+  echo ""
+  echo "To enable Baidu Translation: set BAIDU_TRANSLATE_APP_ID and BAIDU_TRANSLATE_API_KEY, then: yarn run build:baidu-so:linux"
+  echo ""
 }
 
 main "$@"

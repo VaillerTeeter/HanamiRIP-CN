@@ -34,9 +34,14 @@
 - 混流任务队列：点击“添加到混流任务队列”可加入任务；在队列中可“开始任务队列”顺序执行，也可“清除所有任务”；点击任务可查看详情。
 
 ## 目录结构（关键）
-- 前端：见 [src/main.ts](src/main.ts)、[src/App.vue](src/App.vue)、[vite.config.ts](vite.config.ts)
+- 前端入口：见 [src/main.ts](src/main.ts)
+- 应用外壳（页面切换与弹窗组合）：见 [src/App.vue](src/App.vue)
+- 页面与组件：见 [src/pages](src/pages) 、[src/components](src/components)
+- 组合式逻辑（状态/请求/交互）：见 [src/composables](src/composables)
+- 类型与工具：见 [src/types](src/types)、[src/utils](src/utils)
 - 样式：见 [src/style.css](src/style.css)
-- 后端（Tauri）：见 [src-tauri/src/main.rs](src-tauri/src/main.rs)、[src-tauri/Cargo.toml](src-tauri/Cargo.toml)、[src-tauri/tauri.conf.json](src-tauri/tauri.conf.json)
+- 后端入口（Tauri）：见 [src-tauri/src/main.rs](src-tauri/src/main.rs)
+- 后端模块：见 [src-tauri/src](src-tauri/src)（如 bangumi/、media.rs、torrent.rs、storage.rs、external.rs）
 - 百度翻译校验动态库：见 [src-tauri/baidu_verify/src/lib.rs](src-tauri/baidu_verify/src/lib.rs)
 - 环境一键安装：
   - Windows：见 [scripts/setup-env.ps1](scripts/setup-env.ps1)
@@ -49,9 +54,10 @@
 - 系统依赖：自动安装（通过 winget）
 - Node.js 24 LTS + Yarn
 - Rust 工具链（stable）
+- **百度翻译插件**：需 Visual Studio Build Tools（C++ 工作负载）提供 `link.exe`；脚本会检测并在**管理员**下尝试自动安装，非管理员时仅提示，其余步骤照常执行
 - 字体：已内置 Noto Sans SC/JP/KR/TC（400/600），位于 [src/assets/fonts](src/assets/fonts)，无需联网获取 Google Fonts
 
-**一键安装**（使用 PowerShell，会自动安装 Node 24、Yarn、Rust 并安装项目依赖）：
+**一键安装**（使用 PowerShell，会自动安装 Node 24、Yarn、Rust、检测/安装 MSVC 并安装项目依赖）：
 
 ```powershell
 .\scripts\setup-env.ps1
@@ -60,10 +66,11 @@
 ### Linux 环境（Ubuntu）
 - Ubuntu（已在 WSL/Ubuntu 环境验证）
 - 系统依赖（GTK/WebKit 等，脚本会安装）：`build-essential`、`pkg-config`、`libgtk-3-dev`、`libwebkit2gtk-4.1-dev`、`librsvg2-dev`、`libssl-dev`、`curl`、`ca-certificates`
+- **百度翻译插件**：Rust 编译依赖 gcc/cc，由 `build-essential` 提供；脚本会检测，缺失时提示安装
 - Node.js 24 + Yarn（通过 corepack 管理）
 - Rust 工具链（stable）
 
-**一键安装**（会安装系统依赖、Node 24、Yarn、Rust 并安装项目依赖）：
+**一键安装**（会安装系统依赖、Node 24、Yarn、Rust、检测链接器并安装项目依赖）：
 
 ```bash
 ./scripts/setup-env.sh
@@ -105,7 +112,10 @@ yarn run clean:all
 
 为了在本地安全地读取百度翻译密钥，项目通过一个动态库在运行时以只读方式提供凭据，避免密钥出现在源码和产物中。
 
-动态库的源码在 [src-tauri/baidu_verify/src/lib.rs](src-tauri/baidu_verify/src/lib.rs)。编译该动态库需要在"编译期"提供环境变量（仅在本机导出占位，绝不提交到仓库）：
+动态库的源码在 [src-tauri/baidu_verify/src/lib.rs](src-tauri/baidu_verify/src/lib.rs)。编译该动态库需要在「编译期」提供环境变量（仅在本机导出占位，绝不提交到仓库）。
+
+- **Windows**：需已安装 Visual Studio Build Tools（C++ 工作负载），否则会报 `link.exe not found`；运行 `.\scripts\setup-env.ps1` 可检测并在管理员下安装。
+- **Linux**：需已安装 `build-essential`（gcc/cc）；运行 `./scripts/setup-env.sh` 会安装并检测。
 
 ### Windows 环境
 
@@ -139,7 +149,7 @@ export BAIDU_TRANSLATE_API_KEY="<your-api-key>"
 # 方式1：使用 npm script（推荐）
 yarn run build:baidu-so:linux
 
-# 方式2：使用原有脚本（已废弃，建议使用方式1）
+# 方式2：仅构建（不区分平台）
 yarn run build:baidu-so
 ```
 
@@ -171,12 +181,14 @@ export BAIDU_VERIFY_SO="/absolute/path/to/libbaidu_verify.so"
 ## 常见问题
 
 ### Windows 环境
-- **winget 不可用**：请确保使用 Windows 10 1809+ 或 Windows 11，并从 Microsoft Store 安装"应用安装程序"。
+- **winget 不可用**：请确保使用 Windows 10 1809+ 或 Windows 11，并从 Microsoft Store 安装「应用安装程序」。
+- **link.exe not found / 百度插件编译失败**：需安装 Visual Studio Build Tools（C++ 工作负载）。以**管理员**运行 `.\scripts\setup-env.ps1` 可自动安装；或手动执行：`winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools;includeRecommended"`，安装后重新打开终端再运行一次脚本以写入 PATH。
 - **Node 版本不匹配**：项目需要 Node 24（脚本会自动安装）；如需自管，请确保 `yarn dev` 与 `yarn tauri dev` 可正常运行。
 - **百度翻译不可用或返回为空**：请检查本地是否已正确编译并加载动态库（Windows 为 `.dll` 格式），以及密钥是否通过环境变量在构建期注入（不存储到仓库）。
 - **缺少图标文件**：运行 `yarn tauri icon src-tauri/icons/icon.png` 重新生成 Windows 所需的 `.ico` 文件。
 
 ### Linux 环境
 - **Tauri 依赖缺失**：请先执行 `./scripts/setup-env.sh` 或手动安装 GTK/WebKit 相关依赖。
+- **百度插件编译失败 / gcc 未找到**：脚本会安装 `build-essential`；若未以脚本安装，可执行 `sudo apt-get install -y build-essential` 后重跑脚本或直接编译。
 - **Node 版本不匹配**：项目默认使用 Node 24（脚本会安装）；如需自管，请确保 `yarn dev` 与 `yarn tauri dev` 可正常运行。
 - **百度翻译不可用或返回为空**：请检查本地是否已正确编译并加载 `libbaidu_verify.so`，以及密钥是否通过环境变量在构建期注入（不存储到仓库）。
