@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-目前仅维护最新主分支（`master`/`main`）的安全修复与公告。
+目前仅维护最新主分支（`master`/`main`）的安全修复。
 
 | Version | Supported |
 | ------- | --------- |
@@ -11,7 +11,7 @@
 
 ## Reporting a Vulnerability
 
-请通过以下方式提交安全问题（请勿公开发布细节）：
+请通过以下方式提交安全问题：
 
 - 方式 1：使用 GitHub 私有安全报告（Security Advisories）
 - 方式 2：发送邮件至：wyc_19533480830@outlook.com

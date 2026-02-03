@@ -1,5 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: 安全漏洞报告
-    url: https://github.com/VaillerTeeter/HanamiRIP-CN/security/advisories
-    about: 请通过 GitHub 安全报告提交漏洞（勿公开细节）。
