@@ -34,9 +34,14 @@
 - 混流任务队列：点击“添加到混流任务队列”可加入任务；在队列中可“开始任务队列”顺序执行，也可“清除所有任务”；点击任务可查看详情。
 
 ## 目录结构（关键）
-- 前端：见 [src/main.ts](src/main.ts)、[src/App.vue](src/App.vue)、[vite.config.ts](vite.config.ts)
+- 前端入口：见 [src/main.ts](src/main.ts)
+- 应用外壳（页面切换与弹窗组合）：见 [src/App.vue](src/App.vue)
+- 页面与组件：见 [src/pages](src/pages) 、[src/components](src/components)
+- 组合式逻辑（状态/请求/交互）：见 [src/composables](src/composables)
+- 类型与工具：见 [src/types](src/types)、[src/utils](src/utils)
 - 样式：见 [src/style.css](src/style.css)
-- 后端（Tauri）：见 [src-tauri/src/main.rs](src-tauri/src/main.rs)、[src-tauri/Cargo.toml](src-tauri/Cargo.toml)、[src-tauri/tauri.conf.json](src-tauri/tauri.conf.json)
+- 后端入口（Tauri）：见 [src-tauri/src/main.rs](src-tauri/src/main.rs)
+- 后端模块：见 [src-tauri/src](src-tauri/src)（如 bangumi/、media.rs、torrent.rs、storage.rs、external.rs）
 - 百度翻译校验动态库：见 [src-tauri/baidu_verify/src/lib.rs](src-tauri/baidu_verify/src/lib.rs)
 - 环境一键安装：
   - Windows：见 [scripts/setup-env.ps1](scripts/setup-env.ps1)
