@@ -4,7 +4,6 @@
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "banner.ps1")
-Write-HanamiBanner
 
 Write-Host "=== HanamiRIP-CN Windows Environment Setup ===" -ForegroundColor Cyan
 
