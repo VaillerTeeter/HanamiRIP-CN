@@ -5,8 +5,9 @@
   "identifier": "com.hanamirip.cn",
   "build": {
     "beforeDevCommand": "yarn dev",
+    "beforeBuildCommand": "vite build",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
+    "frontendDist": "../build/frontend"
   },
   "app": {
     "windows": [
@@ -38,6 +39,7 @@
     }
   },
   "bundle": {
-    "icon": ["../public/icons/icon.ico", "../public/icons/icon.png", "../public/icons/icon.svg"]
+    "icon": ["../public/icons/icon.ico", "../public/icons/icon.png", "../public/icons/icon.svg"],
+    "targets": ["nsis"]
   }
 }

@@ -116,6 +116,38 @@ function Install-Rust {
     }
 }
 
+# Install Rust targets for Windows x64/x86
+function Install-RustTargets {
+    Write-Host '[CHECK] Rust targets (x86_64, i686) ...' -ForegroundColor Yellow
+    
+    try {
+        # Check if targets are installed
+        $targets = rustup target list 2>$null
+        $hasX64 = $targets | Where-Object { $_ -like "*x86_64-pc-windows-msvc*" -and $_ -like "*installed*" }
+        $hasX86 = $targets | Where-Object { $_ -like "*i686-pc-windows-msvc*" -and $_ -like "*installed*" }
+        
+        if ($hasX64) {
+            Write-Host '[OK] x86_64-pc-windows-msvc already installed' -ForegroundColor Green
+        } else {
+            Write-Host '[INSTALL] Adding x86_64-pc-windows-msvc target ...' -ForegroundColor Cyan
+            rustup target add x86_64-pc-windows-msvc
+            Write-Host '[OK] x86_64-pc-windows-msvc installed' -ForegroundColor Green
+        }
+        
+        if ($hasX86) {
+            Write-Host '[OK] i686-pc-windows-msvc already installed' -ForegroundColor Green
+        } else {
+            Write-Host '[INSTALL] Adding i686-pc-windows-msvc target (32-bit) ...' -ForegroundColor Cyan
+            rustup target add i686-pc-windows-msvc
+            Write-Host '[OK] i686-pc-windows-msvc installed' -ForegroundColor Green
+        }
+    } catch {
+        Write-Host ('[ERROR] Rust target installation failed: ' + $_) -ForegroundColor Red
+        Write-Host 'Manual install: rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc' -ForegroundColor Yellow
+        exit 1
+    }
+}
+
 # Ensure MSVC build tools (link.exe) for Rust/baidu_verify on Windows
 function Ensure-MSVCForRust {
     Write-Host '[CHECK] MSVC linker (link.exe) for Rust ...' -ForegroundColor Yellow
@@ -184,6 +216,31 @@ function Ensure-MSVCForRust {
         Write-Host 'Fix: Run PowerShell as Administrator, then run this script again, or run:' -ForegroundColor Yellow
         Write-Host '  winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools;includeRecommended"' -ForegroundColor White
         Write-Host 'Setup will continue; other steps (deps, FFmpeg, etc.) are not affected.' -ForegroundColor Gray
+    }
+}
+
+# Ensure NSIS for Windows installer bundling
+function Ensure-NSIS {
+    Write-Host '[CHECK] NSIS (makensis.exe) ...' -ForegroundColor Yellow
+
+    $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+    if ($makensis) {
+        Write-Host ('[OK] NSIS found: ' + $makensis.Source) -ForegroundColor Green
+        return
+    }
+
+    Write-Host '[INSTALL] Installing NSIS ...' -ForegroundColor Cyan
+    try {
+        winget install -e --id NSIS.NSIS --silent
+        $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+        if ($makensis) {
+            Write-Host ('[OK] NSIS installed: ' + $makensis.Source) -ForegroundColor Green
+            return
+        }
+        Write-Host '[WARNING] NSIS installed but makensis.exe not found in PATH. Please restart terminal.' -ForegroundColor Yellow
+    } catch {
+        Write-Host ('[ERROR] NSIS installation failed: ' + $_) -ForegroundColor Red
+        Write-Host 'Install manually: https://nsis.sourceforge.io/Download' -ForegroundColor Yellow
     }
 }
 
@@ -332,7 +389,7 @@ function Install-MkvToolNixTools {
 function Generate-Icons {
     Write-Host '[CHECK] Application icons ...' -ForegroundColor Yellow
     
-    $iconPath = Join-Path $PSScriptRoot '..\src-tauri\icons\icon.ico'
+    $iconPath = Join-Path $PSScriptRoot '..\public\icons\icon.ico'
     if (Test-Path $iconPath) {
         Write-Host '[OK] Icon file exists' -ForegroundColor Green
         return
@@ -341,13 +398,13 @@ function Generate-Icons {
     Write-Host '[GENERATE] Application icons ...' -ForegroundColor Cyan
     try {
         if (Get-Command yarn -ErrorAction SilentlyContinue) {
-            yarn tauri icon src-tauri/icons/icon.png
+            yarn tauri icon public/icons/icon.png
         } else {
-            npm run tauri icon src-tauri/icons/icon.png
+            npm run tauri icon public/icons/icon.png
         }
         Write-Host '[OK] Icons generated successfully' -ForegroundColor Green
     } catch {
-        Write-Host '[WARNING] Icon generation failed, will auto-generate on first build' -ForegroundColor Yellow
+        Write-Host ('[WARNING] Icon generation failed: ' + $_) -ForegroundColor Yellow
     }
 }
 
@@ -368,7 +425,9 @@ function Main {
     Install-NodeJS
     Install-Yarn
     Install-Rust
+    Install-RustTargets
     Ensure-MSVCForRust
+    Ensure-NSIS
     Install-ProjectDependencies
     Install-FFmpegTools
     Install-MkvToolNixTools
@@ -380,13 +439,12 @@ function Main {
     Write-Host "Available commands:" -ForegroundColor Cyan
     Write-Host "  yarn tauri dev    # Start Tauri desktop app in dev mode" -ForegroundColor White
     Write-Host "  yarn dev          # Start Vite frontend server only" -ForegroundColor White
-    Write-Host "  yarn build        # Build desktop application" -ForegroundColor White
+    Write-Host "  yarn package:windows  # Build Windows installer" -ForegroundColor White
     Write-Host ""
     Write-Host "To enable Baidu Translation feature, configure environment variables:" -ForegroundColor Yellow
     Write-Host "  `$env:BAIDU_TRANSLATE_APP_ID = ''your-app-id''" -ForegroundColor White
     Write-Host "  `$env:BAIDU_TRANSLATE_API_KEY = ''your-api-key''" -ForegroundColor White
-    Write-Host "  cd src-tauri\baidu_verify" -ForegroundColor White
-    Write-Host "  cargo build --release" -ForegroundColor White
+    Write-Host "  yarn run build:baidu-so:windows" -ForegroundColor White
     Write-Host ""
 }
 

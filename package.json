@@ -9,6 +9,9 @@
     "clean": "node scripts/clean.js",
     "dev": "vite --port 1420 --strictPort",
     "debug": "tauri dev",
+    "package:windows:x64": "tauri build --bundles nsis --target x86_64-pc-windows-msvc && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& { New-Item -ItemType Directory -Force -Path 'dist\\windows' | Out-Null; $nsis = Get-ChildItem 'build\\tauri-target\\x86_64-pc-windows-msvc\\release\\bundle\\nsis\\*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($nsis) { Copy-Item $nsis.FullName -Destination 'dist\\windows\\HanamiRIP-CN_x64-setup.exe' -Force } else { Write-Error 'NSIS installer not found (x64)'; exit 1 } }\"",
+    "package:windows:x86": "tauri build --bundles nsis --target i686-pc-windows-msvc && powershell -NoProfile -ExecutionPolicy Bypass -Command \"& { New-Item -ItemType Directory -Force -Path 'dist\\windows' | Out-Null; $nsis = Get-ChildItem 'build\\tauri-target\\i686-pc-windows-msvc\\release\\bundle\\nsis\\*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($nsis) { Copy-Item $nsis.FullName -Destination 'dist\\windows\\HanamiRIP-CN_x86-setup.exe' -Force } else { Write-Error 'NSIS installer not found (x86)'; exit 1 } }\"",
+    "package:windows": "yarn package:windows:x64 && yarn package:windows:x86",
     "test": "echo \"No tests configured yet\""
   },
   "dependencies": {
