@@ -16,8 +16,13 @@
         "libbaidu",
         "libloading",
         "librqbit",
+        "librsvg",
+        "libwebkit",
         "Loli",
+        "mkvinfo",
         "Mkvmerge",
+        "MSVC",
+        "Noto",
         "NYAA",
         "openbittorrent",
         "opentrackr",
@@ -25,6 +30,7 @@
         "romaji",
         "tauri",
         "upnp",
-        "watchlist"
+        "watchlist",
+        "winget"
     ]
 }
