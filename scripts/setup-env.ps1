@@ -212,7 +212,7 @@ function Install-FFmpegTools {
     Write-Host '[CHECK] FFmpeg tools (ffmpeg/ffprobe) ...' -ForegroundColor Yellow
 
     $projectRoot = Split-Path -Parent $PSScriptRoot
-    $binDir = Join-Path $projectRoot "src-tauri\bin"
+    $binDir = Join-Path $projectRoot "public\tools"
     $ffmpegExe = Join-Path $binDir "ffmpeg.exe"
     $ffprobeExe = Join-Path $binDir "ffprobe.exe"
 
@@ -254,7 +254,7 @@ function Install-MkvToolNixTools {
     Write-Host '[CHECK] MKVToolNix tools (mkvmerge/mkvinfo) ...' -ForegroundColor Yellow
 
     $projectRoot = Split-Path -Parent $PSScriptRoot
-    $binDir = Join-Path $projectRoot "src-tauri\bin"
+    $binDir = Join-Path $projectRoot "public\tools"
     $mkvmergeExe = Join-Path $binDir "mkvmerge.exe"
     $mkvinfoExe = Join-Path $binDir "mkvinfo.exe"
 

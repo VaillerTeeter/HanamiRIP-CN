@@ -7,12 +7,12 @@ fn main() {
   if target.contains("windows") {
     std::env::set_var(
       "TAURI_CONFIG",
-      r#"{ "bundle": { "resources": ["bin/ffprobe.exe", "bin/ffmpeg.exe", "bin/mkvmerge.exe", "bin/mkvinfo.exe"] } }"#,
+      r#"{ "bundle": { "resources": ["../public/tools/ffprobe.exe", "../public/tools/ffmpeg.exe", "../public/tools/mkvmerge.exe", "../public/tools/mkvinfo.exe"] } }"#,
     );
   } else if target.contains("linux") {
     std::env::set_var(
       "TAURI_CONFIG",
-      r#"{ "bundle": { "resources": ["bin/ffprobe", "bin/ffmpeg", "bin/mkvmerge", "bin/mkvinfo"] } }"#,
+      r#"{ "bundle": { "resources": ["../public/tools/ffprobe", "../public/tools/ffmpeg", "../public/tools/mkvmerge", "../public/tools/mkvinfo"] } }"#,
     );
   }
 

@@ -73,7 +73,7 @@ ensure_rust_linker() {
 
 install_ffmpeg_tools() {
   echo "[CHECK] FFmpeg tools (ffmpeg/ffprobe) ..."
-  local bin_dir="$PROJECT_ROOT/src-tauri/bin"
+  local bin_dir="$PROJECT_ROOT/public/tools"
   mkdir -p "$bin_dir"
 
   if [[ -x "$bin_dir/ffmpeg" && -x "$bin_dir/ffprobe" ]]; then
@@ -105,7 +105,7 @@ install_ffmpeg_tools() {
 
 install_mkvtoolnix_tools() {
   echo "[CHECK] MKVToolNix tools (mkvmerge/mkvinfo) ..."
-  local bin_dir="$PROJECT_ROOT/src-tauri/bin"
+  local bin_dir="$PROJECT_ROOT/public/tools"
   mkdir -p "$bin_dir"
 
   if [[ -x "$bin_dir/mkvmerge" && -x "$bin_dir/mkvinfo" ]]; then

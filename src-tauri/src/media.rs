@@ -144,7 +144,7 @@ fn resolve_tool_path(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, Stri
   candidates.push(resource_dir.join("bin").join(name));
 
   if cfg!(debug_assertions) {
-    let dev_bin = PathBuf::from("src-tauri").join("bin");
+    let dev_bin = PathBuf::from("public").join("tools");
     if cfg!(target_os = "windows") {
       candidates.push(dev_bin.join(format!("{name}.exe")));
     }

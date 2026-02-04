@@ -5,7 +5,7 @@
   "identifier": "com.hanamirip.cn",
   "build": {
     "beforeDevCommand": "yarn dev",
-    "beforeBuildCommand": "yarn build",
+    "beforeBuildCommand": "vite build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -39,6 +39,6 @@
     }
   },
   "bundle": {
-    "icon": ["icons/icon.svg"]
+    "icon": ["../public/icons/icon.ico", "../public/icons/icon.png", "../public/icons/icon.svg"]
   }
 }
