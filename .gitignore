@@ -1,14 +1,16 @@
 node_modules/
-src-tauri/target/
+build/
 src-tauri/gen/schemas/
-src-tauri/baidu_verify/target/*
-src-tauri/baidu_verify/libbaidu_verify.so
+# src-tauri/target/
+# src-tauri/gen/schemas/
+# src-tauri/baidu_verify/target/*
+# src-tauri/baidu_verify/libbaidu_verify.so
 # src-tauri/baidu_verify/baidu_verify.dll
 # src-tauri/bin/ffmpeg.exe
 # src-tauri/bin/ffprobe.exe
-src-tauri/bin/ffmpeg
-src-tauri/bin/ffprobe
+# src-tauri/bin/ffmpeg
+# src-tauri/bin/ffprobe
 # src-tauri/bin/mkvinfo.exe
 # src-tauri/bin/mkvmerge.exe
-src-tauri/bin/mkvinfo
-src-tauri/bin/mkvmerge
+# src-tauri/bin/mkvinfo
+# src-tauri/bin/mkvmerge
