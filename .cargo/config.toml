@@ -1,2 +1,3 @@
 [build]
 rustflags = ["-Dwarnings"]
+target-dir = "build/tauri-target"
