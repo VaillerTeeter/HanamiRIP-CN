@@ -40,6 +40,7 @@
 - 组合式逻辑（状态/请求/交互）：见 [src/composables](src/composables)
 - 类型与工具：见 [src/types](src/types)、[src/utils](src/utils)
 - 样式：见 [src/style.css](src/style.css)
+- 静态资源：见 [public](public)（fonts、tools、icons）
 - 后端入口（Tauri）：见 [src-tauri/src/main.rs](src-tauri/src/main.rs)
 - 后端模块：见 [src-tauri/src](src-tauri/src)（如 bangumi/、media.rs、torrent.rs、storage.rs、external.rs）
 - 百度翻译校验动态库：见 [src-tauri/baidu_verify/src/lib.rs](src-tauri/baidu_verify/src/lib.rs)
@@ -80,14 +81,14 @@
 - Windows 与 Ubuntu 会在环境脚本中自动下载并放入 [public/tools](public/tools)。
 - 若需手动放置，请将 ffmpeg/ffprobe/mkvmerge/mkvinfo 放到该目录中（Windows 为 .exe）。
 
-## 开发与构建
+## 开发
 
-项目使用 Yarn 脚本进行开发与打包（参考 [package.json](package.json)）：
+项目使用 Yarn 脚本进行开发（参考 [package.json](package.json)）：
 
 - 开发（桌面应用，Tauri 调试）：
 
 ```bash
-yarn tauri dev
+yarn debug
 ```
 
 - 前端本地开发（仅 Vite Web 服务）：
@@ -96,16 +97,10 @@ yarn tauri dev
 yarn dev
 ```
 
-- 构建桌面应用（打包）：
-
-```bash
-yarn build
-```
-
 - 清理构建产物：
 
 ```bash
-yarn run clean:all
+yarn clean
 ```
 
 ## 可选：生成百度翻译校验动态库

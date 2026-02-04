@@ -5,7 +5,6 @@
   "identifier": "com.hanamirip.cn",
   "build": {
     "beforeDevCommand": "yarn dev",
-    "beforeBuildCommand": "vite build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
