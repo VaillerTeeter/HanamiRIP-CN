@@ -7,22 +7,24 @@
 
 import { rmSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-const rootDir = resolve(import.meta.url, '../../').replace('file:', '');
+const rootDir = resolve(fileURLToPath(import.meta.url), '../../');
 
 const pathsToRemove = [
-  'node_modules',
+  // 'node_modules',
+  'build',
   'dist',
-  'src-tauri/target',
-  'src-tauri/baidu_verify/target',
-  'src-tauri/gen/schemas',
+  'src-tauri/gen',
+  // 'src-tauri/target',
+  // 'src-tauri/baidu_verify/target',
 ];
 
 // Also try to remove baidu_verify library files
 const libPaths = [
-  'src-tauri/baidu_verify/baidu_verify.dll',
-  'src-tauri/baidu_verify/libbaidu_verify.so',
-  'src-tauri/baidu_verify/libbaidu_verify.dylib',
+  // 'src-tauri/baidu_verify/baidu_verify.dll',
+  // 'src-tauri/baidu_verify/libbaidu_verify.so',
+  // 'src-tauri/baidu_verify/libbaidu_verify.dylib',
 ];
 
 console.log('Cleaning up build artifacts...\n');

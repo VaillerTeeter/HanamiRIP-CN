@@ -4,9 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build:baidu-so": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml",
-    "build:baidu-so:linux": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && mkdir -p src-tauri/baidu_verify && cp src-tauri/baidu_verify/target/release/libbaidu_verify.so src-tauri/baidu_verify/libbaidu_verify.so",
-    "build:baidu-so:windows": "cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && powershell -Command \"Copy-Item 'src-tauri/baidu_verify/target/release/baidu_verify.dll' -Destination 'src-tauri/baidu_verify/baidu_verify.dll' -Force\"",
+    "build:baidu-so:linux": "CARGO_TARGET_DIR=build/baidu_verify-build/linux cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml && mkdir -p build/baidu_verify/linux dist/baidu_verify/linux && cp build/baidu_verify-build/linux/release/libbaidu_verify.so build/baidu_verify/linux/libbaidu_verify.so && cp build/baidu_verify-build/linux/release/libbaidu_verify.so dist/baidu_verify/linux/libbaidu_verify.so",
+    "build:baidu-so:windows": "powershell -Command \"$env:CARGO_TARGET_DIR='build/baidu_verify-build\\windows'; cargo build --release --manifest-path src-tauri/baidu_verify/Cargo.toml; New-Item -ItemType Directory -Force -Path 'build/baidu_verify\\windows','dist/baidu_verify\\windows' | Out-Null; Copy-Item 'build/baidu_verify-build\\windows\\release\\baidu_verify.dll' -Destination 'build/baidu_verify\\windows\\baidu_verify.dll' -Force; Copy-Item 'build/baidu_verify-build\\windows\\release\\baidu_verify.dll' -Destination 'dist/baidu_verify\\windows\\baidu_verify.dll' -Force\"",
     "dev": "vite --port 1420 --strictPort",
     "clean:all": "node scripts/clean.js",
     "debug": "tauri dev",

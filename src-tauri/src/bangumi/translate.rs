@@ -38,22 +38,16 @@ fn load_baidu_verifier() -> Result<&'static BaiduVerifier, String> {
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    if let Ok(explicit) = env::var("BAIDU_VERIFY_SO") {
-      candidates.push(PathBuf::from(explicit));
-    }
-
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    candidates.push(manifest_dir.join("baidu_verify").join(lib_name));
-    candidates.push(manifest_dir.join("src-tauri").join("baidu_verify").join(lib_name));
-
-    if let Ok(exe) = env::current_exe() {
-      if let Some(exe_dir) = exe.parent() {
-        candidates.push(exe_dir.join(lib_name));
-        candidates.push(exe_dir.join("baidu_verify").join(lib_name));
-        if let Some(parent) = exe_dir.parent() {
-          candidates.push(parent.join("baidu_verify").join(lib_name));
-        }
-      }
+    if let Some(root_dir) = manifest_dir.parent() {
+      let platform_dir = if cfg!(target_os = "windows") {
+        "windows"
+      } else if cfg!(target_os = "macos") {
+        "macos"
+      } else {
+        "linux"
+      };
+      candidates.push(root_dir.join("dist").join("baidu_verify").join(platform_dir).join(lib_name));
     }
 
     let mut last_error = None;
@@ -105,7 +99,7 @@ fn load_baidu_verifier() -> Result<&'static BaiduVerifier, String> {
        请先构建动态库：\n\
        1. 设置环境变量 BAIDU_TRANSLATE_APP_ID 和 BAIDU_TRANSLATE_API_KEY\n\
        2. 运行命令: yarn run build:baidu-so:windows (Windows) 或 yarn run build:baidu-so:linux (Linux)\n\
-       3. 确保生成的 {} 文件位于 src-tauri/baidu_verify/ 目录下",
+       3. 确保生成的 {} 文件位于 dist/baidu_verify/<platform>/ 目录下",
       lib_name, lib_name
     ))
   })

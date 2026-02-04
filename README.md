@@ -55,7 +55,7 @@
 - Node.js 24 LTS + Yarn
 - Rust 工具链（stable）
 - **百度翻译插件**：需 Visual Studio Build Tools（C++ 工作负载）提供 `link.exe`；脚本会检测并在**管理员**下尝试自动安装，非管理员时仅提示，其余步骤照常执行
-- 字体：已内置 Noto Sans SC/JP/KR/TC（400/600），位于 [src/assets/fonts](src/assets/fonts)，无需联网获取 Google Fonts
+- 字体：已内置 Noto Sans SC/JP/KR/TC（400/600），位于 [public/fonts](public/fonts)，无需联网获取 Google Fonts
 
 **一键安装**（使用 PowerShell，会自动安装 Node 24、Yarn、Rust、检测/安装 MSVC 并安装项目依赖）：
 
@@ -77,7 +77,7 @@
 ```
 
 ## 内置 FFmpeg/MKVToolNix 工具（轨道解析/分离/合成）
-- Windows 与 Ubuntu 会在环境脚本中自动下载并放入 [src-tauri/bin](src-tauri/bin)。
+- Windows 与 Ubuntu 会在环境脚本中自动下载并放入 [public/tools](public/tools)。
 - 若需手动放置，请将 ffmpeg/ffprobe/mkvmerge/mkvinfo 放到该目录中（Windows 为 .exe）。
 
 ## 开发与构建
@@ -128,15 +128,9 @@ $env:BAIDU_TRANSLATE_API_KEY = "<your-api-key>"
 yarn run build:baidu-so:windows
 
 # 验证文件已生成
-Test-Path "src-tauri\baidu_verify\baidu_verify.dll"
+Test-Path "dist\baidu_verify\windows\baidu_verify.dll"
 # 应该返回 True
 
-# 方式2：手动构建
-cd src-tauri\baidu_verify
-cargo build --release
-Copy-Item "target\release\baidu_verify.dll" -Destination "baidu_verify.dll" -Force
-cd ..\..
-# 生成的文件位于：src-tauri\baidu_verify\baidu_verify.dll
 ```
 
 ### Linux 环境
@@ -149,21 +143,12 @@ export BAIDU_TRANSLATE_API_KEY="<your-api-key>"
 # 方式1：使用 npm script（推荐）
 yarn run build:baidu-so:linux
 
-# 方式2：仅构建（不区分平台）
-yarn run build:baidu-so
+# 验证文件已生成
+test -f "dist/baidu_verify/linux/libbaidu_verify.so" && echo "OK"
+
 ```
 
-运行时，后端会尝试从默认路径加载该动态库；也可通过环境变量覆盖路径：
-
-```powershell
-# Windows
-$env:BAIDU_VERIFY_SO = "D:\path\to\baidu_verify.dll"
-```
-
-```bash
-# Linux
-export BAIDU_VERIFY_SO="/absolute/path/to/libbaidu_verify.so"
-```
+运行时，后端只会从 dist/baidu_verify/<platform>/ 目录加载该动态库。
 
 ## 运行机制简述
 - 前端通过 `@tauri-apps/api` 的 `invoke()` 调用后端命令，如：`get_season_subjects`、`get_subject_filters`、`get_subject_origin`、`get_subject_aired_count`、`get_subject_staff`、`get_subject_characters`、`get_subject_summary_cn` 等。
@@ -185,7 +170,7 @@ export BAIDU_VERIFY_SO="/absolute/path/to/libbaidu_verify.so"
 - **link.exe not found / 百度插件编译失败**：需安装 Visual Studio Build Tools（C++ 工作负载）。以**管理员**运行 `.\scripts\setup-env.ps1` 可自动安装；或手动执行：`winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools;includeRecommended"`，安装后重新打开终端再运行一次脚本以写入 PATH。
 - **Node 版本不匹配**：项目需要 Node 24（脚本会自动安装）；如需自管，请确保 `yarn dev` 与 `yarn tauri dev` 可正常运行。
 - **百度翻译不可用或返回为空**：请检查本地是否已正确编译并加载动态库（Windows 为 `.dll` 格式），以及密钥是否通过环境变量在构建期注入（不存储到仓库）。
-- **缺少图标文件**：运行 `yarn tauri icon src-tauri/icons/icon.png` 重新生成 Windows 所需的 `.ico` 文件。
+- **缺少图标文件**：运行 `yarn tauri icon public/icons/icon.png` 重新生成 Windows 所需的 `.ico` 文件。
 
 ### Linux 环境
 - **Tauri 依赖缺失**：请先执行 `./scripts/setup-env.sh` 或手动安装 GTK/WebKit 相关依赖。
