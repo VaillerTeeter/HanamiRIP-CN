@@ -4,7 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-# 添加你的百度验证库依赖
+crate-type = ["cdylib"]

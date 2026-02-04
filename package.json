@@ -6,7 +6,9 @@
 	"type": "module",
 	"scripts": {
 		"predev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/banner.ps1",
-		"dev": "vite --config apps/desktop/vite.config.ts"
+		"dev": "vite --config apps/desktop/vite.config.ts",
+		"debug": "powershell -Command \"$env:CARGO_TARGET_DIR='../../../build/tauri-target'; tauri dev --config apps/desktop/backend/tauri.conf.json\"",
+		"build:baidu-dll": "yarn predev && powershell -Command \"$env:CARGO_TARGET_DIR='build/baidu_verify-build\\windows'; cargo build --release --manifest-path crates/baidu_verify/Cargo.toml; New-Item -ItemType Directory -Force -Path 'dist/baidu_verify\\windows' | Out-Null; Copy-Item 'build/baidu_verify-build\\windows\\release\\baidu_verify.dll' -Destination 'dist/baidu_verify\\windows\\baidu_verify.dll' -Force\""
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.0.0",
