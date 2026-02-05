@@ -7,7 +7,7 @@
     "beforeDevCommand": "yarn --cwd ../.. dev",
     "beforeBuildCommand": "yarn --cwd ../.. vite build --config apps/desktop/vite.config.ts",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../../build/frontend"
+    "frontendDist": "../../../build/frontend"
   },
   "app": {
     "windows": [

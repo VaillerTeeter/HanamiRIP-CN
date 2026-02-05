@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: resolve(__dirname, "frontend"),
+  publicDir: resolve(__dirname, "public"),
   plugins: [vue()],
   base: "./",
   build: {

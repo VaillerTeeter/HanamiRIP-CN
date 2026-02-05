@@ -230,6 +230,31 @@ function Ensure-NSIS {
         return
     }
 
+    # Try common install locations and add to PATH if present
+    $nsisCandidates = @(
+        "${env:ProgramFiles}\NSIS",
+        "${env:ProgramFiles(x86)}\NSIS",
+        "${env:ProgramFiles}\NSIS\Bin",
+        "${env:ProgramFiles(x86)}\NSIS\Bin"
+    )
+    foreach ($dir in $nsisCandidates) {
+        if (-not (Test-Path $dir)) { continue }
+        $exePath = Join-Path $dir "makensis.exe"
+        if (Test-Path $exePath) {
+            $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($userPath -notlike "*$dir*") {
+                [System.Environment]::SetEnvironmentVariable("Path", ($userPath + ';' + $dir), "User")
+                Write-Host ('[OK] NSIS path added to user PATH: ' + $dir) -ForegroundColor Green
+            }
+            $env:PATH = $env:PATH + ';' + $dir
+            $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+            if ($makensis) {
+                Write-Host ('[OK] NSIS found: ' + $makensis.Source) -ForegroundColor Green
+                return
+            }
+        }
+    }
+
     Write-Host '[INSTALL] Installing NSIS ...' -ForegroundColor Cyan
     try {
         winget install -e --id NSIS.NSIS --silent
@@ -243,6 +268,44 @@ function Ensure-NSIS {
         Write-Host ('[ERROR] NSIS installation failed: ' + $_) -ForegroundColor Red
         Write-Host 'Install manually: https://nsis.sourceforge.io/Download' -ForegroundColor Yellow
     }
+}
+
+# Ensure nsis_tauri_utils.dll for bundling (download if missing)
+function Ensure-NSISTauriUtils {
+    Write-Host '[CHECK] NSIS tauri utils (nsis_tauri_utils.dll) ...' -ForegroundColor Yellow
+
+    $downloadUrl = "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll"
+    $destDir = Join-Path $env:LOCALAPPDATA "tauri\NSIS\Plugins\x86-unicode\additional"
+    $destPath = Join-Path $destDir "nsis_tauri_utils.dll"
+
+    if (-not (Test-Path $destDir)) {
+        New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+    }
+
+    if (Test-Path $destPath) {
+        Write-Host ('[OK] nsis_tauri_utils.dll found: ' + $destPath) -ForegroundColor Green
+        return
+    }
+
+    Write-Host '[INSTALL] Download nsis_tauri_utils.dll ...' -ForegroundColor Cyan
+
+    $maxRetries = 3
+    for ($i = 1; $i -le $maxRetries; $i++) {
+        try {
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $destPath -UseBasicParsing
+            if (Test-Path $destPath) {
+                Write-Host "[OK] nsis_tauri_utils.dll downloaded to $destPath" -ForegroundColor Green
+                return
+            }
+        } catch {
+            Write-Host ("[WARN] Download failed (attempt {0}/{1}): {2}" -f $i, $maxRetries, $_) -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    Write-Host "[ERROR] Failed to download nsis_tauri_utils.dll. Please download it manually:" -ForegroundColor Red
+    Write-Host $downloadUrl -ForegroundColor Yellow
+    Write-Host "Then place it at: $destPath" -ForegroundColor Yellow
 }
 
 # Install project dependencies
@@ -427,6 +490,7 @@ function Main {
     Install-RustTargets
     Ensure-MSVCForRust
     Ensure-NSIS
+    Ensure-NSISTauriUtils
     Install-ProjectDependencies
     Install-FFmpegTools
     Install-MkvToolNixTools

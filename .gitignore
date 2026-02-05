@@ -2,3 +2,4 @@ node_modules/
 build/baidu_verify-build/
 apps/desktop/backend/gen/
 build/tauri-target/
+build/frontend/
