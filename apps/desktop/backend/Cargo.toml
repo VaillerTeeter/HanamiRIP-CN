@@ -1,28 +1,55 @@
+# 这是 Rust 包的基础信息区（package 表）。
+# 这里的配置会影响 crate 的名称、版本、作者等元信息。
 [package]
+# 包名：最终会体现在编译产物和依赖引用中。
 name = "hanamirip-cn"
+# 版本号：使用语义化版本（major.minor.patch）。
 version = "0.1.0"
+# 描述信息：用于说明项目用途（发布/文档展示）。
 description = "Tauri + Vite + Vue + NaiveUI template"
+# 作者列表：可用于发布信息展示。
 authors = ["you"]
+# Rust 语言版本（edition），影响语法与编译行为。
 edition = "2021"
 
+# 构建脚本依赖（build-dependencies）：
+# 仅在 build.rs 运行时需要，不会进入最终运行时依赖。
 [build-dependencies]
+# tauri-build 用于在构建阶段生成 Tauri 所需资源。
 tauri-build = { version = "2.5.5", features = [] }
 
+# 运行时依赖（dependencies）：实际编译进程序的库。
 [dependencies]
+# 时间处理库（此处只启用 clock，避免引入过多功能）。
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# 动态库加载（用于百度翻译密钥读取）。
 libloading = "0.8"
+# 线程安全的惰性初始化。
 once_cell = "1"
+# HTTP 客户端：启用 TLS 与常见压缩，以及 JSON 解析。
 reqwest = { version = "0.12", features = ["rustls-tls", "gzip", "brotli", "deflate", "json"] }
+# 序列化/反序列化基础库。
 serde = { version = "1.0", features = ["derive"] }
+# JSON 解析库。
 serde_json = "1.0"
+# 打开外部链接（调用系统默认浏览器）。
 open = "5"
+# BT 下载引擎。
 librqbit = "8.1.1"
+# 异步运行时与并发基础设施。
 tokio = { version = "1", features = ["sync", "rt", "macros", "process"] }
+# Tauri 框架核心。
 tauri = { version = "2.5.5", features = [] }
+# Tauri 插件：对话框。
 tauri-plugin-dialog = "2.3.1"
+# Tauri 插件：shell 调用。
 tauri-plugin-shell = "2.3.5"
+# Tauri 插件：文件系统访问。
 tauri-plugin-fs = "2.2.1"
+# URL 解析工具。
 url = "2"
 
+# 特性开关（features）：用于按需启用功能。
 [features]
+# 自定义协议：让 Tauri 支持自定义资源加载协议。
 custom-protocol = ["tauri/custom-protocol"]

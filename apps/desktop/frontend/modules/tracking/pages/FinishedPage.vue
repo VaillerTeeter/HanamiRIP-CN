@@ -1,9 +1,17 @@
 <script setup lang="ts">
+/**
+ * 已完番剧页面：展示标记为 watched 的条目列表。
+ */
 import { NButton, NCard } from "naive-ui";
 import type { TrackedItem } from "../types/tracking";
 import type { MonthAnime } from "../types/anime";
 import { formatAirDate, formatRating } from "../../../shared/utils/format";
 
+/**
+ * finishedList：已完条目列表
+ * setExclusiveStatus：切换追番状态
+ * openExternalLink：打开条目外链
+ */
 const props = defineProps<{
   finishedList: TrackedItem[];
   setExclusiveStatus: (item: MonthAnime, target: "watching" | "backlog" | "watched" | null) => void | Promise<void>;
@@ -12,6 +20,7 @@ const props = defineProps<{
 </script>
 
 <template>
+  <!-- 已完番剧列表 -->
   <div class="app-body list-view">
     <NCard title="已完番剧" size="small" class="watchlist-card">
       <div v-if="props.finishedList.length" class="watchlist-grid">

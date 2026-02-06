@@ -1,3 +1,11 @@
+/*
+  媒体轨道相关功能：
+  - 使用 mkvmerge 或 ffprobe 解析媒体文件的轨道信息；
+  - 支持混流（把视频/音频/字幕轨道合并成一个文件）；
+  - 提供文件大小等基础信息。
+  该模块主要服务于前端的“轨道选择/混流”功能。
+*/
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -5,6 +13,7 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use tauri::Manager;
 
+/// 单条轨道信息（返回给前端）。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackInfoResponse {
@@ -21,12 +30,14 @@ pub struct TrackInfoResponse {
   pub file_size: Option<String>,
 }
 
+/// 轨道解析结果：包含多个轨道。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackParseResponse {
   pub tracks: Vec<TrackInfoResponse>,
 }
 
+/// 混流输入：一个媒体文件 + 选中的轨道。
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MixTrackInput {
@@ -37,18 +48,21 @@ pub struct MixTrackInput {
   pub track_langs: HashMap<String, String>,
 }
 
+// ffprobe 的 format 节点（只保留需要的字段）。
 #[derive(Deserialize)]
 struct FFProbeFormat {
   format_name: Option<String>,
   size: Option<String>,
 }
 
+// ffprobe 的流 disposition（默认/强制标记）。
 #[derive(Clone, Deserialize)]
 struct FFProbeDisposition {
   default: Option<i32>,
   forced: Option<i32>,
 }
 
+// ffprobe 的 tags 节点（语言/标题/编码等）。
 #[derive(Deserialize)]
 struct FFProbeStreamTags {
   language: Option<String>,
@@ -57,6 +71,7 @@ struct FFProbeStreamTags {
   charset: Option<String>,
 }
 
+// ffprobe 的单条 stream 信息（包含视频/音频/字幕）。
 #[derive(Deserialize)]
 struct FFProbeStream {
   index: Option<u32>,
@@ -71,23 +86,27 @@ struct FFProbeStream {
   tags: Option<FFProbeStreamTags>,
 }
 
+// ffprobe 的整体输出。
 #[derive(Deserialize)]
 struct FFProbeOutput {
   streams: Option<Vec<FFProbeStream>>,
   format: Option<FFProbeFormat>,
 }
 
+// mkvmerge 的容器属性。
 #[derive(Deserialize)]
 struct MkvmergeContainerProperties {
   file_size: Option<u64>,
 }
 
+// mkvmerge 的容器信息。
 #[derive(Deserialize)]
 struct MkvmergeContainer {
   r#type: Option<String>,
   properties: Option<MkvmergeContainerProperties>,
 }
 
+// mkvmerge 的轨道属性。
 #[derive(Deserialize)]
 struct MkvmergeTrackProperties {
   language: Option<String>,
@@ -103,6 +122,7 @@ struct MkvmergeTrackProperties {
   audio_sampling_frequency: Option<f64>,
 }
 
+// mkvmerge 的单条轨道信息。
 #[derive(Deserialize)]
 struct MkvmergeTrack {
   id: u32,
@@ -111,12 +131,14 @@ struct MkvmergeTrack {
   properties: Option<MkvmergeTrackProperties>,
 }
 
+// mkvmerge 的整体输出。
 #[derive(Deserialize)]
 struct MkvmergeOutput {
   container: Option<MkvmergeContainer>,
   tracks: Option<Vec<MkvmergeTrack>>,
 }
 
+// 把字节数转换成人类可读的大小（B/KB/MB/GB/TB）。
 fn format_bytes_readable(bytes: u64) -> String {
   const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
   let mut size = bytes as f64;
@@ -132,6 +154,8 @@ fn format_bytes_readable(bytes: u64) -> String {
   }
 }
 
+// 解析内置工具（mkvmerge/ffprobe）的路径。
+// 会优先在打包资源里找，开发模式下也会尝试 public/tools。
 fn resolve_tool_path(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
   let resource_dir = app
     .path()
@@ -159,6 +183,8 @@ fn resolve_tool_path(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, Stri
   Err(format!("未找到内置工具 {name}，请检查打包资源是否包含对应文件"))
 }
 
+// 把语言代码映射为人类可读的中文名称。
+// 如果无法识别，返回 None。
 fn map_language_name(code: &str) -> Option<String> {
   let normalized = code.trim().to_lowercase();
   if normalized.starts_with("zh-hans") {
@@ -186,6 +212,8 @@ fn map_language_name(code: &str) -> Option<String> {
   }
 }
 
+// 根据 ffprobe 的 stream 构造“轨道属性描述”。
+// 视频：分辨率 + 帧率；音频：声道数 + 声道布局；其它：尝试标题。
 fn build_attributes(stream: &FFProbeStream) -> Option<String> {
   if stream.codec_type.as_deref() == Some("video") {
     let mut parts = Vec::new();
@@ -212,6 +240,7 @@ fn build_attributes(stream: &FFProbeStream) -> Option<String> {
   stream.tags.as_ref().and_then(|t| t.title.clone())
 }
 
+// 根据 mkvmerge 的轨道属性构造“轨道属性描述”。
 fn build_mkvmerge_attributes(props: &MkvmergeTrackProperties, kind: &str) -> Option<String> {
   if kind == "video" {
     return props.pixel_dimensions.clone();
@@ -229,12 +258,16 @@ fn build_mkvmerge_attributes(props: &MkvmergeTrackProperties, kind: &str) -> Opt
   None
 }
 
+// 解析媒体文件中的轨道信息。
+// - MKV 系列使用 mkvmerge（信息更完整）
+// - 其他格式使用 ffprobe
 #[tauri::command]
 pub async fn parse_media_tracks(
   app: tauri::AppHandle,
   path: String,
   kind: String,
 ) -> Result<TrackParseResponse, String> {
+  // 统一轨道类型为小写，便于比较。
   let kind_lower = kind.to_lowercase();
   let ext = Path::new(&path)
     .extension()
@@ -242,22 +275,28 @@ pub async fn parse_media_tracks(
     .unwrap_or("")
     .to_lowercase();
 
+  // MKV 系列文件用 mkvmerge 解析。
   if ["mkv", "mka", "mks"].contains(&ext.as_str()) {
+    // 找到 mkvmerge 工具路径。
     let mkvmerge_path = resolve_tool_path(&app, "mkvmerge")?;
+    // 调用 mkvmerge 输出 JSON。
     let output = Command::new(mkvmerge_path)
       .args(["-J", &path])
       .output()
       .await
       .map_err(|e| format!("调用 mkvmerge 失败: {e}"))?;
 
+    // mkvmerge 返回非 0 则报错。
     if !output.status.success() {
       let stderr = String::from_utf8_lossy(&output.stderr);
       return Err(format!("mkvmerge 执行失败: {stderr}"));
     }
 
+    // 解析 mkvmerge JSON 输出。
     let parsed: MkvmergeOutput = serde_json::from_slice(&output.stdout)
       .map_err(|e| format!("解析 mkvmerge 输出失败: {e}"))?;
 
+    // 读取容器信息（类型 + 文件大小）。
     let container = parsed
       .container
       .as_ref()
@@ -269,6 +308,7 @@ pub async fn parse_media_tracks(
       .and_then(|p| p.file_size)
       .map(format_bytes_readable);
 
+    // 过滤并映射轨道信息。
     let tracks = parsed
       .tracks
       .unwrap_or_default()
@@ -281,6 +321,7 @@ pub async fn parse_media_tracks(
         track_type == kind_lower
       })
       .map(|track| {
+        // properties 可能为空，给一个默认空结构。
         let props = track.properties.unwrap_or(MkvmergeTrackProperties {
           language: None,
           language_ietf: None,
@@ -294,10 +335,12 @@ pub async fn parse_media_tracks(
           audio_channels: None,
           audio_sampling_frequency: None,
         });
+        // 优先使用 IETF 语言代码，没有再回退到旧字段。
         let lang = props.language_ietf.clone().or(props.language.clone());
         let language_name = lang
           .as_deref()
           .and_then(map_language_name);
+        // 优先使用更详细的编码名称，否则回退到其它字段。
         let codec = props
           .codec_name
           .clone()
@@ -323,7 +366,9 @@ pub async fn parse_media_tracks(
     return Ok(TrackParseResponse { tracks });
   }
 
+  // 非 MKV 格式：使用 ffprobe 解析。
   let ffprobe_path = resolve_tool_path(&app, "ffprobe")?;
+  // 调用 ffprobe 输出 JSON。
   let output = Command::new(ffprobe_path)
     .args([
       "-v",
@@ -338,14 +383,17 @@ pub async fn parse_media_tracks(
     .await
     .map_err(|e| format!("调用 ffprobe 失败: {e}"))?;
 
+  // ffprobe 返回非 0 则报错。
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     return Err(format!("ffprobe 执行失败: {stderr}"));
   }
 
+  // 解析 ffprobe JSON 输出。
   let parsed: FFProbeOutput = serde_json::from_slice(&output.stdout)
     .map_err(|e| format!("解析 ffprobe 输出失败: {e}"))?;
 
+  // 读取容器信息（类型 + 文件大小）。
   let container = parsed
     .format
     .as_ref()
@@ -362,6 +410,7 @@ pub async fn parse_media_tracks(
     .into_iter()
     .filter(|stream| stream.codec_type.as_deref() == Some(&kind_lower))
     .map(|stream| {
+      // 解析语言/标题/编码等标签。
       let lang = stream.tags.as_ref().and_then(|t| t.language.clone());
       let language_name = lang.as_deref().and_then(map_language_name);
       let track_name = stream.tags.as_ref().and_then(|t| t.title.clone());
@@ -373,6 +422,7 @@ pub async fn parse_media_tracks(
         .codec_name
         .clone()
         .unwrap_or_else(|| "unknown".to_string());
+      // disposition 用来判断默认/强制轨道。
       let disposition = stream
         .disposition
         .clone()
@@ -399,34 +449,45 @@ pub async fn parse_media_tracks(
   Ok(TrackParseResponse { tracks })
 }
 
+// 获取媒体文件大小（人类可读格式）。
 #[tauri::command]
 pub async fn get_media_file_size(path: String) -> Result<Option<String>, String> {
   let meta = fs::metadata(&path).map_err(|e| format!("读取文件大小失败: {e}"))?;
   Ok(Some(format_bytes_readable(meta.len())))
 }
 
+// 将不同类型的轨道混合成一个输出文件。
+// 流程：
+// 1) 校验输入；
+// 2) 为每种轨道生成临时文件；
+// 3) 再把临时文件合并成最终文件。
 #[tauri::command]
 pub async fn mix_media_tracks(
   app: tauri::AppHandle,
   inputs: Vec<MixTrackInput>,
   output_path: String,
 ) -> Result<String, String> {
+  // 没有输入直接报错。
   if inputs.is_empty() {
     return Err("未提供可合成的轨道".to_string());
   }
 
+  // 自动补充输出后缀名（默认 mkv）。
   let mut output = PathBuf::from(&output_path);
   if output.extension().is_none() {
     output.set_extension("mkv");
   }
+  // 确保输出目录存在。
   if let Some(parent) = output.parent() {
     if !parent.exists() {
       fs::create_dir_all(parent).map_err(|e| format!("创建输出目录失败: {e}"))?;
     }
   }
 
+  // 混流依赖 mkvmerge。
   let mkvmerge_path = resolve_tool_path(&app, "mkvmerge")?;
 
+  // 为不同轨道类型指定默认语言代码。
   fn lang_for_kind(kind: &str) -> &'static str {
     match kind {
       "video" => "ja",
@@ -436,6 +497,7 @@ pub async fn mix_media_tracks(
     }
   }
 
+  // 生成命令行参数字符串（包含必要的引号转义）。
   fn format_arg(arg: &str) -> String {
     if arg.contains(' ') || arg.contains('\t') || arg.contains('"') {
       format!("\"{}\"", arg.replace('"', "\\\""))
@@ -444,6 +506,7 @@ pub async fn mix_media_tracks(
     }
   }
 
+  // 用于错误日志：把参数拼成可读的命令行字符串。
   fn build_cmdline(args: &[String]) -> String {
     let mut cmdline = Vec::new();
     cmdline.push(format_arg("mkvmerge"));
@@ -453,6 +516,7 @@ pub async fn mix_media_tracks(
     cmdline.join(" ")
   }
 
+  // 执行 mkvmerge，失败时返回带命令行的错误。
   async fn run_mkvmerge(mkvmerge_path: &PathBuf, args: &[String]) -> Result<(), String> {
     let output_exec = Command::new(mkvmerge_path)
       .args(args.iter())
@@ -474,8 +538,10 @@ pub async fn mix_media_tracks(
     Ok(())
   }
 
+  // 按轨道类型聚合输入，确保每种类型最多一个文件。
   let mut kind_inputs: HashMap<String, MixTrackInput> = HashMap::new();
   for input in inputs {
+    // 校验输入路径。
     let path = input.path.trim();
     if path.is_empty() {
       return Err("轨道文件路径为空".to_string());
@@ -483,6 +549,7 @@ pub async fn mix_media_tracks(
     if !Path::new(path).exists() {
       return Err(format!("轨道文件不存在: {path}"));
     }
+    // 清理并过滤轨道 ID。
     let track_ids: Vec<String> = input
       .track_ids
       .into_iter()
@@ -499,6 +566,7 @@ pub async fn mix_media_tracks(
       track_ids: Vec::new(),
       track_langs: HashMap::new(),
     });
+    // 同一类型只允许一个文件，避免混乱。
     if entry.path != path {
       return Err(format!("同一类型只支持一个文件：{}", kind_lower));
     }
@@ -512,10 +580,12 @@ pub async fn mix_media_tracks(
     }
   }
 
+  // 视频轨道是必须的，没有就无法生成有效文件。
   if !kind_inputs.contains_key("video") {
     return Err("请先检测并选择至少一个视频轨道".to_string());
   }
 
+  // 生成临时目录，用于存放中间文件。
   let temp_root = app
     .path()
     .app_data_dir()
@@ -525,14 +595,17 @@ pub async fn mix_media_tracks(
     .join(chrono::Utc::now().timestamp_millis().to_string());
   fs::create_dir_all(&temp_root).map_err(|e| format!("创建临时目录失败: {e}"))?;
 
+  // 记录临时文件路径，便于最后清理。
   let mut temp_files: Vec<PathBuf> = Vec::new();
 
+  // 根据轨道类型生成临时文件（只包含指定轨道）。
   async fn build_temp(
     kind: &str,
     input: &MixTrackInput,
     temp_root: &PathBuf,
     mkvmerge_path: &PathBuf,
   ) -> Result<PathBuf, String> {
+    // 不同轨道类型使用不同容器后缀。
     let ext = match kind {
       "video" => "mkv",
       "audio" => "mka",
@@ -540,10 +613,12 @@ pub async fn mix_media_tracks(
       _ => "mkv",
     };
     let temp_path = temp_root.join(format!("{kind}.{ext}"));
+    // mkvmerge 参数列表。
     let mut args: Vec<String> = Vec::new();
     args.push("-o".to_string());
     args.push(temp_path.to_string_lossy().to_string());
 
+    // 根据类型选择要保留的轨道。
     match kind {
       "video" => {
         args.push("--video-tracks".to_string());
@@ -572,6 +647,7 @@ pub async fn mix_media_tracks(
       _ => {}
     }
 
+    // 为每条轨道设置语言/默认/强制标记。
     let lang = lang_for_kind(kind);
     for track_id in &input.track_ids {
       args.push("--track-name".to_string());
@@ -591,6 +667,7 @@ pub async fn mix_media_tracks(
     Ok::<PathBuf, String>(temp_path)
   }
 
+  // 记录每种轨道生成的临时文件。
   let mut video_temp = None;
   let mut audio_temp = None;
   let mut subtitle_temp = None;
@@ -611,6 +688,7 @@ pub async fn mix_media_tracks(
     subtitle_temp = Some(path);
   }
 
+  // 最终合并命令参数。
   let mut merge_args: Vec<String> = Vec::new();
   merge_args.push("-o".to_string());
   merge_args.push(output.to_string_lossy().to_string());
@@ -625,8 +703,10 @@ pub async fn mix_media_tracks(
     merge_args.push(path.to_string_lossy().to_string());
   }
 
+  // 执行最终合并。
   run_mkvmerge(&mkvmerge_path, &merge_args).await?;
 
+  // 清理临时文件（失败不影响最终结果）。
   for path in temp_files {
     let _ = fs::remove_file(path);
   }

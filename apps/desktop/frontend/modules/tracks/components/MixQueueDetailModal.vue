@@ -1,16 +1,29 @@
 <script setup lang="ts">
+/**
+ * 混流任务详情弹窗：
+ * - 展示任务基本信息（ID/时间/输出路径/状态）
+ * - 展示每个输入轨道的明细（类型/来源/轨道 ID/语言）
+ */
 import { NModal } from "naive-ui";
 import type { MixQueueItem } from "../types/tracks";
 
+/**
+ * show：是否显示弹窗
+ * selectedMixTask：当前选中的任务（为空则不渲染内容）
+ */
 const props = defineProps<{
   show: boolean;
   selectedMixTask: MixQueueItem | null;
 }>();
 
+/**
+ * emit：控制弹窗显示/隐藏。
+ */
 const emit = defineEmits<{ (e: "update:show", value: boolean): void }>();
 </script>
 
 <template>
+  <!-- 任务详情弹窗容器 -->
   <NModal
     :show="props.show"
     preset="card"
@@ -18,7 +31,9 @@ const emit = defineEmits<{ (e: "update:show", value: boolean): void }>();
     style="width: min(720px, 92vw)"
     @update:show="(value: boolean) => emit('update:show', value)"
   >
+    <!-- 仅在有选中任务时显示内容 -->
     <div v-if="props.selectedMixTask" class="mix-queue-detail">
+      <!-- 基础信息：任务 ID/创建时间/输出路径/状态 -->
       <div class="mix-queue-detail-row">
         <span class="mix-queue-detail-label">任务 ID</span>
         <span>#{{ props.selectedMixTask.id }}</span>
@@ -52,6 +67,7 @@ const emit = defineEmits<{ (e: "update:show", value: boolean): void }>();
         </span>
       </div>
 
+      <!-- 轨道输入列表：逐个展示输入源信息 -->
       <div class="mix-queue-detail-section">轨道输入</div>
       <div v-for="(input, index) in props.selectedMixTask.inputs" :key="`${input.kind}-${index}`" class="mix-queue-detail-block">
         <div class="mix-queue-detail-row">

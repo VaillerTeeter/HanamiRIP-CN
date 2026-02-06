@@ -1,23 +1,27 @@
 # HanamiRIP-CN Windows Environment Setup Script
 # Run with PowerShell 5.1+
+# 目的：一次性检查并安装本项目在 Windows 上的所有必需依赖。
 
+# 遇到任何错误就直接抛出，避免脚本继续执行导致半安装状态。
 $ErrorActionPreference = "Stop"
 
+# 引入 Banner 脚本（同目录），用于在控制台输出项目 Logo。
 . (Join-Path $PSScriptRoot "banner.ps1")
 
 Write-Host "=== HanamiRIP-CN Windows Environment Setup ===" -ForegroundColor Cyan
 
-# Check if running as administrator
+# 检查当前 PowerShell 是否具备管理员权限（安装系统级工具时需要）。
 function Test-Administrator {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Install Node.js 24
+# 安装 Node.js 24（前端构建/工具链依赖）。
 function Install-NodeJS {
     Write-Host '[CHECK] Node.js ...' -ForegroundColor Yellow
     
+    # 标记变量：用于表达“是否已满足要求”，便于阅读流程。
     $nodeInstalled = $false
     try {
         $nodeVersion = node --version 2>$null
@@ -37,6 +41,7 @@ function Install-NodeJS {
         Write-Host '[INFO] Node.js not detected' -ForegroundColor Yellow
     }
     
+    # 依赖外部命令 winget：若不可用，会在 Main 中提前报错。
     Write-Host '[INSTALL] Node.js 24 LTS ...' -ForegroundColor Cyan
     Write-Host "Installing via winget, please wait..."
     
@@ -53,7 +58,7 @@ function Install-NodeJS {
     }
 }
 
-# Install Yarn
+# 安装 Yarn（优先使用 corepack，失败则提示手动安装）。
 function Install-Yarn {
     Write-Host '[CHECK] Yarn ...' -ForegroundColor Yellow
     
@@ -69,6 +74,7 @@ function Install-Yarn {
     
     try {
         # Try to enable corepack
+        # 启用 corepack 需要管理员权限，失败时会提醒用户手动操作。
         if (Test-Administrator) {
             corepack enable
         } else {
@@ -85,7 +91,7 @@ function Install-Yarn {
     }
 }
 
-# Install Rust
+# 安装 Rust 工具链（后端/构建依赖）。
 function Install-Rust {
     Write-Host '[CHECK] Rust ...' -ForegroundColor Yellow
     
@@ -117,7 +123,7 @@ function Install-Rust {
     }
 }
 
-# Install Rust targets for Windows x64/x86
+# 安装 Rust 交叉目标（x64/x86），用于生成不同位数的 Windows 二进制。
 function Install-RustTargets {
     Write-Host '[CHECK] Rust targets (x86_64, i686) ...' -ForegroundColor Yellow
     
@@ -149,17 +155,18 @@ function Install-RustTargets {
     }
 }
 
-# Ensure MSVC build tools (link.exe) for Rust/baidu_verify on Windows
+# 确保 MSVC 链接器存在：Rust 在 Windows 上编译需要 link.exe。
 function Ensure-MSVCForRust {
     Write-Host '[CHECK] MSVC linker (link.exe) for Rust ...' -ForegroundColor Yellow
 
+    # 通过 Get-Command 查找可执行文件，避免硬编码路径。
     $linkExe = Get-Command link.exe -ErrorAction SilentlyContinue
     if ($linkExe) {
         Write-Host ('[OK] link.exe found: ' + $linkExe.Source) -ForegroundColor Green
         return
     }
 
-    # Search for link.exe under Visual Studio / Build Tools
+    # 在常见 Visual Studio/BuildTools 安装目录中寻找 link.exe。
     $vsBasePaths = @(
         "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools",
         "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community",
@@ -171,6 +178,7 @@ function Ensure-MSVCForRust {
         "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise"
     )
 
+    # 如果找到 link.exe，就把它所在目录加入用户 PATH。
     $msvcBinPath = $null
     foreach ($base in $vsBasePaths) {
         if (-not (Test-Path $base)) { continue }
@@ -199,7 +207,7 @@ function Ensure-MSVCForRust {
         return
     }
 
-    # Not found: try install Build Tools if admin; only show ERROR when cannot install and local has no link.exe
+    # 如果未找到：管理员权限下尝试安装 Build Tools，否则给出手动安装提示。
     if (Test-Administrator) {
         Write-Host '[INSTALL] Installing Visual Studio Build Tools (C++) ...' -ForegroundColor Cyan
         try {
@@ -220,17 +228,18 @@ function Ensure-MSVCForRust {
     }
 }
 
-# Ensure NSIS for Windows installer bundling
+# 确保 NSIS 打包工具可用（生成 Windows 安装包需要）。
 function Ensure-NSIS {
     Write-Host '[CHECK] NSIS (makensis.exe) ...' -ForegroundColor Yellow
 
+    # makensis.exe 是 NSIS 的核心命令，存在即代表已安装。
     $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
     if ($makensis) {
         Write-Host ('[OK] NSIS found: ' + $makensis.Source) -ForegroundColor Green
         return
     }
 
-    # Try common install locations and add to PATH if present
+    # 尝试常见安装路径，若存在则添加到 PATH，避免要求重装。
     $nsisCandidates = @(
         "${env:ProgramFiles}\NSIS",
         "${env:ProgramFiles(x86)}\NSIS",
@@ -270,10 +279,11 @@ function Ensure-NSIS {
     }
 }
 
-# Ensure nsis_tauri_utils.dll for bundling (download if missing)
+# 确保 tauri 打包所需的 NSIS 插件 DLL 存在，缺失则自动下载。
 function Ensure-NSISTauriUtils {
     Write-Host '[CHECK] NSIS tauri utils (nsis_tauri_utils.dll) ...' -ForegroundColor Yellow
 
+    # 固定指向官方发布地址，避免下载到不可信来源。
     $downloadUrl = "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll"
     $destDir = Join-Path $env:LOCALAPPDATA "tauri\NSIS\Plugins\x86-unicode\additional"
     $destPath = Join-Path $destDir "nsis_tauri_utils.dll"
@@ -289,6 +299,7 @@ function Ensure-NSISTauriUtils {
 
     Write-Host '[INSTALL] Download nsis_tauri_utils.dll ...' -ForegroundColor Cyan
 
+    # 简单重试机制，降低偶发网络失败的影响。
     $maxRetries = 3
     for ($i = 1; $i -le $maxRetries; $i++) {
         try {
@@ -308,10 +319,11 @@ function Ensure-NSISTauriUtils {
     Write-Host "Then place it at: $destPath" -ForegroundColor Yellow
 }
 
-# Install project dependencies
+# 安装前端/脚本依赖（优先 Yarn，其次 npm）。
 function Install-ProjectDependencies {
     Write-Host '[INSTALL] Project dependencies ...' -ForegroundColor Cyan
     
+    # 项目根目录 = scripts 的上级目录。
     $projectRoot = Split-Path -Parent $PSScriptRoot
     Set-Location $projectRoot
     
@@ -328,11 +340,12 @@ function Install-ProjectDependencies {
     }
 }
 
-# Install bundled FFmpeg tools (ffmpeg/ffprobe)
+# 安装 FFmpeg 工具（用于媒体处理，打包到 public/tools）。
 function Install-FFmpegTools {
     Write-Host '[CHECK] FFmpeg tools (ffmpeg/ffprobe) ...' -ForegroundColor Yellow
 
     $projectRoot = Split-Path -Parent $PSScriptRoot
+    # 统一把工具放在 public/tools，应用运行时直接读取。
     $binDir = Join-Path $projectRoot "apps\desktop\public\tools"
     $ffmpegExe = Join-Path $binDir "ffmpeg.exe"
     $ffprobeExe = Join-Path $binDir "ffprobe.exe"
@@ -350,6 +363,7 @@ function Install-FFmpegTools {
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
     $zipPath = Join-Path $tempDir "ffmpeg.zip"
+    # 下载官方 Windows 预编译版本，避免自行编译成本。
     $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     try {
         Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
@@ -371,6 +385,7 @@ function Install-FFmpegTools {
     }
 }
 
+# 安装 MKVToolNix（封装/信息读取所需）。
 function Install-MkvToolNixTools {
     Write-Host '[CHECK] MKVToolNix tools (mkvmerge/mkvinfo) ...' -ForegroundColor Yellow
 
@@ -392,6 +407,7 @@ function Install-MkvToolNixTools {
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
     $zipPath = Join-Path $tempDir "mkvtoolnix.zip"
+    # 先访问版本索引页，再解析最新版本号。
     $indexUrl = "https://mkvtoolnix.download/windows/releases/"
     $url = $null
     try {
@@ -449,7 +465,7 @@ function Install-MkvToolNixTools {
     }
 }
 
-# Generate icon files
+# 生成应用图标（tauri icon 工具），只在缺失时执行。
 function Generate-Icons {
     Write-Host '[CHECK] Application icons ...' -ForegroundColor Yellow
     
@@ -472,9 +488,9 @@ function Generate-Icons {
     }
 }
 
-# Main function
+# 主流程：按顺序执行所有检查/安装步骤，保证依赖完整。
 function Main {
-    # Check winget availability
+    # 检查 winget 是否可用，后续安装步骤都依赖它。
     try {
         winget --version | Out-Null
     } catch {
@@ -484,6 +500,7 @@ function Main {
         exit 1
     }
     
+    # 依赖按顺序执行，避免后续步骤缺少前置工具。
     Install-NodeJS
     Install-Yarn
     Install-Rust

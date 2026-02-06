@@ -1,9 +1,17 @@
 <script setup lang="ts">
+/**
+ * 补番计划页面：展示标记为 backlog 的条目列表。
+ */
 import { NButton, NCard } from "naive-ui";
 import type { TrackedItem } from "../types/tracking";
 import type { MonthAnime } from "../types/anime";
 import { formatAirDate, formatRating } from "../../../shared/utils/format";
 
+/**
+ * backlogList：补番条目列表
+ * setExclusiveStatus：切换追番状态
+ * openExternalLink：打开条目外链
+ */
 const props = defineProps<{
   backlogList: TrackedItem[];
   setExclusiveStatus: (item: MonthAnime, target: "watching" | "backlog" | "watched" | null) => void | Promise<void>;
@@ -12,6 +20,7 @@ const props = defineProps<{
 </script>
 
 <template>
+  <!-- 补番计划列表 -->
   <div class="app-body list-view">
     <NCard title="补番计划" size="small" class="watchlist-card">
       <div v-if="props.backlogList.length" class="watchlist-grid">

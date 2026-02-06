@@ -1,3 +1,9 @@
+/*
+  下载页面的组合式逻辑：
+  - 维护下载列表状态
+  - 调用后端下载/暂停/恢复/删除接口
+  - 定时轮询下载状态并更新 UI
+*/
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -5,11 +11,18 @@ import type { DownloadItem } from "../types/download";
 import { formatBytes, formatSpeed, parseSpeedToBps } from "../../../shared/utils/format";
 import type { SearchResult } from "../../search/types/search";
 
+/**
+ * 下载页业务入口：返回给组件使用的状态与操作函数。
+ */
 export const useDownloadPage = () => {
+  // 所有下载任务的响应式数组（会驱动 UI 列表渲染）。
   const downloads = ref<DownloadItem[]>([]);
+  // 本地自增 ID，用于在前端区分条目。
   let downloadSeq = 1;
+  // 轮询定时器句柄，避免重复创建。
   let downloadPoller: number | null = null;
 
+  // 新增一个下载记录（立即显示在列表顶端）。
   const addDownload = (
     title: string,
     link: string,
@@ -17,6 +30,7 @@ export const useDownloadPage = () => {
     path?: string,
     payload?: Partial<DownloadItem>
   ) => {
+    // 记录开始时间（ISO 字符串便于存储和排序）。
     const startedAt = new Date().toISOString();
     downloads.value = [
       {
@@ -33,6 +47,7 @@ export const useDownloadPage = () => {
     ];
   };
 
+  // 将内部状态转成用户可读的中文文本。
   const formatDownloadStatus = (status: DownloadItem["status"]) => {
     switch (status) {
       case "completed":
@@ -46,6 +61,7 @@ export const useDownloadPage = () => {
     }
   };
 
+  // 根据状态给文件名加后缀，提示用户当前状态。
   const downloadDisplayTitle = (item: DownloadItem) => {
     if (item.status === "completed") return item.title;
     if (item.status === "paused") return `${item.title}.paused`;
@@ -53,13 +69,16 @@ export const useDownloadPage = () => {
     return `${item.title}.downloading`;
   };
 
+  // 判断“是否处于暂停态”（包括后端返回的 paused/stopped）。
   const isDownloadPaused = (item: DownloadItem) => {
     const state = item.state?.toLowerCase() ?? "";
     return item.status === "paused" || state.includes("paused") || state.includes("stopped");
   };
 
+  // 终态：已完成或失败（终态不再轮询/操作）。
   const isDownloadTerminal = (item: DownloadItem) => item.status === "completed" || item.status === "failed";
 
+  // 暂停单个下载（需要有 torrentId 且不是终态）。
   const handlePauseDownload = async (item: DownloadItem) => {
     if (item.torrentId == null || isDownloadTerminal(item) || isDownloadPaused(item)) return;
     try {
@@ -70,6 +89,7 @@ export const useDownloadPage = () => {
     }
   };
 
+  // 恢复单个下载（必须处于暂停态）。
   const handleResumeDownload = async (item: DownloadItem) => {
     if (item.torrentId == null || !isDownloadPaused(item)) return;
     try {
@@ -80,6 +100,7 @@ export const useDownloadPage = () => {
     }
   };
 
+  // 删除下载：先通知后端删除任务，再从前端列表移除。
   const handleDeleteDownload = async (item: DownloadItem) => {
     if (item.torrentId != null) {
       try {
@@ -92,31 +113,40 @@ export const useDownloadPage = () => {
     downloads.value = downloads.value.filter((row) => row.id !== item.id);
   };
 
+  // 是否存在“正在下载”的任务（用于 UI 显示全局按钮）。
   const hasActiveDownloads = computed(() =>
     downloads.value.some((item) => item.torrentId != null && !isDownloadTerminal(item) && !isDownloadPaused(item))
   );
+  // 是否存在“已暂停”的任务。
   const hasPausedDownloads = computed(() =>
     downloads.value.some((item) => item.torrentId != null && isDownloadPaused(item))
   );
+  // 合计速度（字符串转为 B/s 再求和）。
   const totalDownloadBps = computed(() => downloads.value.reduce((sum, item) => sum + parseSpeedToBps(item.downloadSpeed), 0));
   const totalUploadBps = computed(() => downloads.value.reduce((sum, item) => sum + parseSpeedToBps(item.uploadSpeed), 0));
+  // 把合计速度格式化成可读文本。
   const totalDownloadSpeedLabel = computed(() => formatSpeed(totalDownloadBps.value));
   const totalUploadSpeedLabel = computed(() => formatSpeed(totalUploadBps.value));
 
+  // 批量暂停：对所有“正在下载”的任务并发调用暂停。
   const handlePauseAllDownloads = async () => {
     const active = downloads.value.filter((item) => item.status === "started" && item.torrentId != null);
     await Promise.all(active.map((item) => handlePauseDownload(item)));
   };
 
+  // 批量恢复：对所有“已暂停”的任务并发调用恢复。
   const handleResumeAllDownloads = async () => {
     const paused = downloads.value.filter((item) => item.status === "paused" && item.torrentId != null);
     await Promise.all(paused.map((item) => handleResumeDownload(item)));
   };
 
+  // 轮询后端状态并更新本地列表。
+  // 说明：这里会并发请求所有活动任务的状态。
   const refreshDownloadStatuses = async () => {
     const active = downloads.value.filter((item) => item.torrentId != null);
     if (!active.length) return;
 
+    // 并发拉取每个任务的状态。
     const updates = await Promise.all(
       active.map(async (item) => {
         try {
@@ -140,6 +170,7 @@ export const useDownloadPage = () => {
       })
     );
 
+    // 是否需要触发“完成后移动文件”的收尾动作。
     let shouldFinalize = false;
     const updated = downloads.value.map((item) => {
       const update = updates.find((u) => u.id === item.id)?.stats;
@@ -160,6 +191,7 @@ export const useDownloadPage = () => {
         uploadSpeed: update.uploadSpeed ?? undefined,
         timeRemaining: update.timeRemaining ?? undefined,
       };
+      // 完成但还没收尾时，标记需要执行 finalize。
       if (completed && !item.finalized && item.tempPath && item.finalPath) {
         shouldFinalize = true;
       }
@@ -167,6 +199,7 @@ export const useDownloadPage = () => {
     });
     downloads.value = updated;
 
+    // 对已完成但未收尾的任务，调用后端移动文件。
     if (shouldFinalize) {
       await Promise.all(
         downloads.value.map(async (item) => {
@@ -185,11 +218,16 @@ export const useDownloadPage = () => {
     }
   };
 
+  // 点击“下载”时的主流程：
+  // 1) 选择目录
+  // 2) 调用后端开始下载
+  // 3) 写入本地列表
   const handleDownloadClick = async (item: SearchResult, kind: DownloadItem["kind"], link?: string) => {
     if (!link) return;
 
     let path: string | undefined;
     try {
+      // 弹出系统目录选择框。
       const result = await openDialog({
         title: kind === "magnet" ? "选择磁链下载目录" : "选择种子保存目录",
         directory: true,
@@ -203,6 +241,7 @@ export const useDownloadPage = () => {
     }
 
     try {
+      // 启动下载任务并拿到后端返回的任务信息。
       const started = await invoke<{
         id: number;
         infoHash: string;
@@ -222,12 +261,14 @@ export const useDownloadPage = () => {
     }
   };
 
+  // 组件挂载时开启定时轮询。
   onMounted(() => {
     if (downloadPoller == null) {
       downloadPoller = window.setInterval(refreshDownloadStatuses, 1500);
     }
   });
 
+  // 组件卸载时清理定时器，避免内存泄漏。
   onBeforeUnmount(() => {
     if (downloadPoller != null) {
       window.clearInterval(downloadPoller);

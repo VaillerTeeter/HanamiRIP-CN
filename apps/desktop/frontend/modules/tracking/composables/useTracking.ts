@@ -1,28 +1,44 @@
+/*
+  追番状态管理：
+  - 读取/保存追番列表
+  - 维护 watching/backlog/watched 状态
+  - 定时刷新条目信息
+*/
 import { computed, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { MonthAnime } from "../types/anime";
 import type { ItemStatus, StatusKey, TrackedItem } from "../types/tracking";
 
+/**
+ * 追番页业务入口：返回状态列表与操作函数。
+ */
 export const useTracking = () => {
+  // 每个条目的状态（key=条目 id）。
   const statuses = ref<Record<number, ItemStatus>>({});
+  // 追番列表本体。
   const trackedItems = ref<TrackedItem[]>([]);
 
+  // 把日期字符串转换成可排序的时间戳（无效则排到最后）。
   const parseDateValue = (date?: string) => {
     if (!date) return Number.POSITIVE_INFINITY;
     const parsed = new Date(`${date}T00:00:00`);
     return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
   };
 
+  // 按日期升序排序（不改变原数组）。
   const sortByDate = (list: TrackedItem[]) =>
     list
       .slice()
       .sort((a, b) => parseDateValue(a.date) - parseDateValue(b.date));
 
+  // 不同状态的列表拆分。
   const watchingList = computed(() => sortByDate(trackedItems.value.filter((item) => item.watching)));
   const backlogList = computed(() => sortByDate(trackedItems.value.filter((item) => item.backlog)));
   const finishedList = computed(() => sortByDate(trackedItems.value.filter((item) => item.watched)));
 
+  // 星期文案，用于按周几分组。
   const weekdayLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  // 把“正在追番”按星期分组，便于日历式展示。
   const watchingByWeekday = computed(() => {
     const groups = new Map<number | null, TrackedItem[]>();
     watchingList.value.forEach((item) => {
@@ -49,6 +65,7 @@ export const useTracking = () => {
       .filter((group) => group.items.length);
   });
 
+  // 规范化状态：确保三者互斥（只保留一个 true）。
   const normalizeStatus = (state?: ItemStatus): ItemStatus => {
     if (!state) return { watching: false, backlog: false, watched: false };
     const keys: Array<keyof ItemStatus> = ["watched", "watching", "backlog"];
@@ -60,6 +77,7 @@ export const useTracking = () => {
     };
   };
 
+  // 确保某个条目有状态记录（无则初始化）。
   const ensureStatus = (id: number): ItemStatus => {
     if (!statuses.value[id]) {
       statuses.value[id] = { watching: false, backlog: false, watched: false };
@@ -69,6 +87,7 @@ export const useTracking = () => {
     return statuses.value[id];
   };
 
+  // 用数据库结果同步本地状态。
   const syncStatusesFromTracked = (items: TrackedItem[]) => {
     const map: Record<number, ItemStatus> = {};
     items.forEach((item) => {
@@ -82,6 +101,7 @@ export const useTracking = () => {
     trackedItems.value = items;
   };
 
+  // 把条目状态写入后端数据库。
   const persistStatusToDb = async (item: MonthAnime, nextStatus: ItemStatus) => {
     if (!item.id) return;
     const payload = {
@@ -103,6 +123,7 @@ export const useTracking = () => {
     syncStatusesFromTracked(saved);
   };
 
+  // 将条目设置为某个单一状态（互斥）。
   const setExclusiveStatus = async (item: MonthAnime, target: StatusKey) => {
     if (!item.id) return;
     const base: ItemStatus = { watching: false, backlog: false, watched: false };
@@ -112,17 +133,21 @@ export const useTracking = () => {
     await persistStatusToDb(item, base);
   };
 
+  // 更新单个条目字段（不可变更新）。
   const updateTrackedItem = (id: number, patch: Partial<TrackedItem>) => {
     trackedItems.value = trackedItems.value.map((item) => (item.id === id ? { ...item, ...patch } : item));
   };
 
+  // 同时刷新条目数量上限，避免请求过多。
   const CONCURRENT_REFRESH_LIMIT = 6;
 
+  // 刷新“正在追番”的详细信息（可选持久化）。
   const refreshWatchingDetails = async (options: { persist?: boolean } = {}) => {
     const queue = [...watchingList.value];
     if (!queue.length) return;
     const updated: TrackedItem[] = [];
 
+    // worker 从队列中逐个取任务，直到队列为空。
     const worker = async () => {
       while (queue.length) {
         const item = queue.shift();
@@ -165,9 +190,11 @@ export const useTracking = () => {
       }
     };
 
+    // 启动有限数量的并发 worker。
     const concurrency = Math.min(CONCURRENT_REFRESH_LIMIT, queue.length);
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
+    // 需要持久化时，再写回数据库。
     if (options.persist && updated.length) {
       const persistQueue = [...updated];
       const persistWorker = async () => {
@@ -185,6 +212,7 @@ export const useTracking = () => {
     }
   };
 
+  // 把三态转换成单个 key 便于 UI 展示。
   const currentStatusKey = (status: ItemStatus): StatusKey => {
     if (status.watched) return "watched";
     if (status.watching) return "watching";
@@ -192,6 +220,7 @@ export const useTracking = () => {
     return null;
   };
 
+  // 根据当前状态与目标状态生成按钮文案。
   const labelForAction = (active: StatusKey, target: StatusKey) => {
     if (target === "watching") return active === "watching" ? "正在追番" : active ? "转为正在追番" : "加入正在追番";
     if (target === "backlog") return active === "backlog" ? "补番计划" : active ? "转为补番计划" : "加入补番计划";
@@ -199,6 +228,7 @@ export const useTracking = () => {
     return "";
   };
 
+  // 首次加载：读取追番列表并刷新详细信息。
   onMounted(async () => {
     try {
       const saved = await invoke<TrackedItem[]>("list_tracked_subjects");

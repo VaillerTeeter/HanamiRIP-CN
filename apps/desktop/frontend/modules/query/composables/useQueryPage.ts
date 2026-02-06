@@ -1,10 +1,18 @@
+/*
+  查询页面的组合式逻辑：
+  - 选择年份/季度并拉取番剧数据
+  - 维护筛选器与详情面板
+  - 处理滚动、预加载与进度条动画
+*/
 import { computed, h, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { NTag } from "naive-ui";
 import type { MonthAnime, SeasonResponse, StaffGroup, CharacterLink } from "../../tracking/types/anime";
 import type { ItemStatus } from "../../tracking/types/tracking";
 
+// 当前月份（1-12），用于默认季节判断。
 const currentMonth = new Date().getMonth() + 1;
+// 将月份映射到所在季度的“起始月份”。
 const getSeasonStartMonth = (value: number) => {
   if (value >= 1 && value <= 3) return 1;
   if (value >= 4 && value <= 6) return 4;
@@ -12,13 +20,16 @@ const getSeasonStartMonth = (value: number) => {
   return 10;
 };
 
+// 当前年份，用于构造年份下拉选项。
 const currentYear = new Date().getFullYear();
 const minYear = 2000;
+// 年份下拉列表：从当前年递减到最小年。
 const yearOptions = Array.from({ length: currentYear - minYear + 1 }, (_, i) => {
   const value = currentYear - i;
   return { label: `${value}年`, value };
 });
 
+// 四季选项（按“季度起始月”表示）。
 const seasonOptionsAll = [
   { label: "冬季", value: 1 },
   { label: "春季", value: 4 },
@@ -26,6 +37,7 @@ const seasonOptionsAll = [
   { label: "秋季", value: 10 },
 ];
 
+// 由季度起始月得到后端需要的季节 key。
 const seasonKeyFromMonth = (value: number | null) => {
   if (!value) return "";
   if (value === 1) return "winter";
@@ -35,6 +47,7 @@ const seasonKeyFromMonth = (value: number | null) => {
   return "";
 };
 
+// 由季度起始月得到中文标签。
 const seasonLabelFromMonth = (value: number | null) => {
   if (!value) return "";
   if (value === 1) return "冬季";
@@ -44,6 +57,8 @@ const seasonLabelFromMonth = (value: number | null) => {
   return "";
 };
 
+// 预加载图片：减少列表滚动时的闪烁。
+// 采用 race 超时，避免图片过多导致等待过久。
 const preloadImages = (items: MonthAnime[], timeoutMs = 5000) => {
   const tasks = items.map(
     (item) =>
@@ -60,11 +75,13 @@ const preloadImages = (items: MonthAnime[], timeoutMs = 5000) => {
   ]);
 };
 
+// 交互/进度条相关的时间常量（毫秒）。
 const INACTIVITY_SCROLL_DELAY_MS = 5000;
 const MIN_PROGRESS_DURATION_MS = 100_000;
 const CATCHUP_DURATION_MS = 5_000;
 const MAX_PROGRESS_BEFORE_FINISH = 99;
 
+// 官方标签选项：用于筛选器列表。
 const OFFICIAL_TYPE_OPTIONS = [
   "科幻",
   "喜剧",
@@ -96,6 +113,7 @@ const OFFICIAL_TYPE_OPTIONS = [
   "职场",
 ];
 
+// 官方地区选项。
 const OFFICIAL_REGION_OPTIONS = [
   "日本",
   "欧美",
@@ -112,6 +130,7 @@ const OFFICIAL_REGION_OPTIONS = [
   "马来西亚",
 ];
 
+// 官方受众选项。
 const OFFICIAL_AUDIENCE_OPTIONS = [
   "BL",
   "GL",
@@ -122,12 +141,18 @@ const OFFICIAL_AUDIENCE_OPTIONS = [
   "青年向",
 ];
 
+// 统一的“全选”标签值。
 const allFilterValue = "全部";
 
+/**
+ * 查询页业务入口：负责季节查询、筛选与详情展示逻辑。
+ */
 export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus }) => {
+  // 年/季选择。
   const year = ref<number | null>(new Date().getFullYear());
   const month = ref<number | null>(getSeasonStartMonth(currentMonth));
 
+  // 根据年份限制可选季节（当前年不允许选择未来季节）。
   const seasonOptions = computed(() => {
     if (!year.value) return seasonOptionsAll;
     if (year.value === currentYear) {
@@ -136,6 +161,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     return seasonOptionsAll;
   });
 
+  // 当年份或可选季节变化时，确保 month 仍然有效。
   watch([year, seasonOptions], () => {
     const optionsList = seasonOptions.value;
     if (!optionsList.length) {
@@ -147,6 +173,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   });
 
+  // 查询与详情相关的 UI 状态。
   const loading = ref(false);
   const results = ref<MonthAnime[]>([]);
   const resultUrl = ref("");
@@ -173,27 +200,33 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
   const summaryLoadingId = ref<number | null>(null);
   const summaryError = ref("");
 
+  // 选中条目的 staff 列表（来自缓存）。
   const selectedStaff = computed(() => {
     const id = selected.value?.id;
     if (!id) return [] as StaffGroup[];
     return staffCache.value[id] || [];
   });
 
+  // 选中条目的角色列表（来自缓存）。
   const selectedCharacters = computed(() => {
     const id = selected.value?.id;
     if (!id) return [] as CharacterLink[];
     return characterCache.value[id] || [];
   });
 
+  // 是否展示结果区块（查询完成且进度条走完）。
   const showResults = computed(() => hasQueried.value && !loading.value && progress.value >= 100);
   const detailVisible = computed(() => showResults.value && !!selected.value);
 
+  // 进度条与滚动相关的定时器句柄。
   let progressTimer: number | undefined;
   let catchupTimer: number | undefined;
   let listMouseLeaveTimer: number | undefined;
+  // 查询结果缓存：避免重复请求同一季节。
   const dataCache = new Map<string, SeasonResponse>();
   const queryToken = ref(0);
 
+  // 记录列表项 DOM，用于滚动定位。
   const setListItemRef = (item: MonthAnime, el: HTMLElement | null) => {
     if (!item.id) return;
     if (el) {
@@ -203,6 +236,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 清除鼠标离开后的延迟滚动定时器。
   const clearListMouseLeaveTimer = () => {
     if (listMouseLeaveTimer) {
       window.clearTimeout(listMouseLeaveTimer);
@@ -210,6 +244,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 从元素向上查找可滚动容器。
   const findScrollParent = (el: HTMLElement | null): HTMLElement | null => {
     let node: HTMLElement | null = el?.parentElement || null;
     while (node) {
@@ -223,6 +258,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     return null;
   };
 
+  // 将当前选中项滚动到容器中间，方便查看。
   const scrollToSelectedItem = async (behavior: ScrollBehavior = "smooth") => {
     if (!detailVisible.value) return;
     const id = selected.value?.id;
@@ -246,10 +282,12 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     target.scrollIntoView({ behavior, block: "center", inline: "center" });
   };
 
+  // 鼠标进入列表时，停止自动滚动。
   const handleListMouseEnter = () => {
     clearListMouseLeaveTimer();
   };
 
+  // 鼠标离开列表一段时间后，自动回滚到选中项。
   const handleListMouseLeave = () => {
     if (!detailVisible.value) return;
     clearListMouseLeaveTimer();
@@ -258,12 +296,14 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }, INACTIVITY_SCROLL_DELAY_MS);
   };
 
+  // 组件销毁时清理定时器。
   onBeforeUnmount(() => {
     clearListMouseLeaveTimer();
     if (progressTimer) window.clearInterval(progressTimer);
     if (catchupTimer) window.clearInterval(catchupTimer);
   });
 
+  // 筛选器状态。
   const monthFilter = ref<Array<number | string>>([]);
   const typeFilter = ref<string[]>([]);
   const regionFilter = ref<string[]>([]);
@@ -271,6 +311,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
   const filterLoading = ref(false);
   const filtersInitialized = ref(false);
 
+  // 月份筛选选项来源于当前结果集。
   const monthFilterOptions = computed(() => {
     const values = new Set<number>();
     results.value.forEach((item) => {
@@ -295,6 +336,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     ...OFFICIAL_AUDIENCE_OPTIONS.map((value) => ({ label: value, value })),
   ]);
 
+  // “全选”行为处理：勾选“全部”时自动选择所有项。
   const applySelectAllBehavior = <T extends string | number>(
     next: T[],
     optionsList: { value: T }[],
@@ -318,12 +360,14 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     return allRealSelected ? [allFilterValue as unknown as T, ...real] : nextReal;
   };
 
+  // 判断某个条目是否匹配当前筛选器。
   const matchesTextFilter = (values: string[] | undefined, selectedList: string[], total: number) => {
     if (!selectedList.length || selectedList.includes(allFilterValue) || selectedList.length >= total) return true;
     if (!values || !values.length) return false;
     return values.some((value) => selectedList.includes(value));
   };
 
+  // 过滤后的结果列表（真正用于渲染）。
   const filteredResults = computed(() => {
     return results.value.filter((item) => {
       const monthAll =
@@ -341,6 +385,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
 
   const resultCount = computed(() => filteredResults.value.length);
 
+  // 初始化筛选器（只在首次查询后执行一次）。
   const updateDefaultFilters = () => {
     if (filtersInitialized.value) return;
     monthFilter.value = [];
@@ -354,6 +399,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     updateDefaultFilters();
   });
 
+  // 根据选中数量生成筛选器提示文案。
   const getFilterLabel = (selectedCount: number, totalCount: number) => {
     if (selectedCount === 0) return "未筛选";
     if (selectedCount >= totalCount) return "全部";
@@ -376,6 +422,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     getFilterLabel(audienceFilter.value.filter((v) => v !== allFilterValue).length, OFFICIAL_AUDIENCE_OPTIONS.length)
   );
 
+  // 处理月份筛选变化。
   const handleMonthFilterChange = (value: Array<number | string>) => {
     const prev = monthFilter.value;
     const next = applySelectAllBehavior(value, monthFilterOptions.value, prev);
@@ -383,6 +430,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     selected.value = null;
   };
 
+  // 处理类型筛选变化。
   const handleTypeFilterChange = (value: string[]) => {
     const prev = typeFilter.value;
     const next = applySelectAllBehavior(value, typeOptions.value, prev);
@@ -390,6 +438,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     selected.value = null;
   };
 
+  // 处理地区筛选变化。
   const handleRegionFilterChange = (value: string[]) => {
     const prev = regionFilter.value;
     const next = applySelectAllBehavior(value, regionOptions.value, prev);
@@ -397,6 +446,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     selected.value = null;
   };
 
+  // 处理受众筛选变化。
   const handleAudienceFilterChange = (value: string[]) => {
     const prev = audienceFilter.value;
     const next = applySelectAllBehavior(value, audienceOptions.value, prev);
@@ -404,8 +454,10 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     selected.value = null;
   };
 
+  // 渲染筛选器标签（Naive UI）。
   const renderFilterTag = (label: string) => h(NTag, { size: "small", type: "info" }, { default: () => label });
 
+  // 拉取某一季的数据（带缓存）。
   const loadSeasonData = async (yearValue: number, seasonMonth: number) => {
     const seasonKey = seasonKeyFromMonth(seasonMonth);
     if (!seasonKey) throw new Error("季节选择无效");
@@ -422,6 +474,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     return payload;
   };
 
+  // 清理进度条相关定时器。
   const clearProgressTimers = () => {
     if (progressTimer) {
       window.clearInterval(progressTimer);
@@ -433,6 +486,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 取消正在进行的查询（通过 token 失效 + 重置状态）。
   const cancelActiveQuery = () => {
     queryToken.value += 1;
     loading.value = false;
@@ -441,6 +495,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     progress.value = 0;
   };
 
+  // 启动“伪进度条”动画，让用户感知加载过程。
   const startProgress = () => {
     clearProgressTimers();
     progress.value = 0;
@@ -465,6 +520,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }, 120);
   };
 
+  // 结束进度条：若耗时不足，平滑补齐到 100%。
   const finishProgress = async () => {
     const startedAt = progressStartAt.value;
     clearProgressTimers();
@@ -491,6 +547,11 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }, 50);
   };
 
+  // 执行查询主流程：
+  // 1) 清状态
+  // 2) 拉取数据
+  // 3) 预加载图片
+  // 4) 结束进度条
   const handleQuery = async () => {
     if (!year.value || !month.value) return;
     const token = ++queryToken.value;
@@ -537,15 +598,19 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 当用户切换年份或月份时，如果正在加载就取消旧请求，避免竞态更新。
   watch([year, month], () => {
     if (loading.value) {
       cancelActiveQuery();
     }
   });
 
+  // 批量加载筛选标签（类型/地区/受众）。
+  // 说明：这些字段需要额外 API 才能得到，因此采用并发 worker 处理。
   const loadFiltersForResults = async (items: MonthAnime[]) => {
     filterLoading.value = true;
     const queue = items.slice();
+    // worker 从队列里取数据，直到空队列为止。
     const worker = async () => {
       while (queue.length) {
         const item = queue.shift();
@@ -561,18 +626,22 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
           item.regions = payload.regions || [];
           item.audiences = payload.audiences || [];
         } catch (_) {
+          // 即便失败也要确保字段存在，避免 UI 读取时报错。
           item.types = item.types || [];
           item.regions = item.regions || [];
           item.audiences = item.audiences || [];
         }
       }
     };
+    // 并发数限制，防止请求过多导致后端压力过大。
     const concurrency = 6;
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     filterLoading.value = false;
     updateDefaultFilters();
   };
 
+  // 选择某个条目后，触发一系列“详情补全”请求。
+  // 这些请求互不依赖，所以并行触发。
   const handleSelect = (item: MonthAnime) => {
     selected.value = item;
     if (item.id) options.ensureStatus(item.id);
@@ -581,19 +650,21 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     staffError.value = "";
     characterError.value = "";
     summaryError.value = "";
-    void loadOrigin(item);
-    void loadAiredCount(item);
-    void loadStaff(item);
-    void loadCharacters(item);
-    void loadSummaryCn(item);
+    void loadOrigin(item);      // 原作来源
+    void loadAiredCount(item);  // 已播出/总集数
+    void loadStaff(item);       // 制作人员
+    void loadCharacters(item);  // 角色
+    void loadSummaryCn(item);   // 中文简介
   };
 
+  // 打开制作人员弹窗时，确保数据已加载。
   const handleStaffOpen = async () => {
     if (!selected.value) return;
     showStaffModal.value = true;
     await loadStaff(selected.value);
   };
 
+  // 拉取“原作来源”，已存在则跳过。
   const loadOrigin = async (item: MonthAnime) => {
     if (!item?.id) return;
     if (item.origin !== undefined) return;
@@ -603,8 +674,10 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
       const payload = await invoke<{ id: number; origin?: string | null }>("get_subject_origin", {
         id: item.id,
       });
+      // API 可能返回 null，这里统一为空字符串方便展示。
       item.origin = payload.origin ?? "";
     } catch (error) {
+      // 出错时写入错误提示，同时给空值避免 UI 显示 undefined。
       originError.value = String(error);
       item.origin = "";
     } finally {
@@ -614,6 +687,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 拉取已播出/总集数，已存在则跳过。
   const loadAiredCount = async (item: MonthAnime) => {
     if (!item?.id) return;
     if (item.airedCount !== undefined) return;
@@ -626,9 +700,11 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
           id: item.id,
         }
       );
+      // 后端可能返回 null，这里统一成 0，避免 NaN。
       item.airedCount = payload.airedCount ?? 0;
       item.totalCount = payload.totalCount ?? 0;
     } catch (error) {
+      // 失败时也保证字段有默认值，避免 UI 读取失败。
       airedError.value = String(error);
       item.airedCount = 0;
       item.totalCount = 0;
@@ -639,6 +715,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 拉取制作人员列表，使用缓存避免重复请求。
   const loadStaff = async (item: MonthAnime) => {
     if (!item?.id) return;
     if (staffCache.value[item.id]) return;
@@ -648,8 +725,10 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
       const payload = await invoke<{ id: number; groups: StaffGroup[] }>("get_subject_staff", {
         id: item.id,
       });
+      // 写入缓存，避免重复加载。
       staffCache.value = { ...staffCache.value, [item.id]: payload.groups || [] };
     } catch (error) {
+      // 失败时也写入空数组，避免 UI 反复触发加载。
       staffError.value = String(error);
       staffCache.value = { ...staffCache.value, [item.id]: [] };
     } finally {
@@ -659,6 +738,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 拉取角色列表，使用缓存避免重复请求。
   const loadCharacters = async (item: MonthAnime) => {
     if (!item?.id) return;
     if (characterCache.value[item.id]) return;
@@ -669,8 +749,10 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
         "get_subject_characters",
         { id: item.id }
       );
+      // 写入缓存。
       characterCache.value = { ...characterCache.value, [item.id]: payload.characters || [] };
     } catch (error) {
+      // 失败时写入空数组，避免重复请求。
       characterError.value = String(error);
       characterCache.value = { ...characterCache.value, [item.id]: [] };
     } finally {
@@ -680,6 +762,8 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 拉取中文简介：
+  // - 仅在需要时刷新（比如翻译失败或与原文相同）。
   const loadSummaryCn = async (item: MonthAnime) => {
     if (!item?.id) return;
     const shouldRefresh =
@@ -699,14 +783,17 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
           summary: item.summary || "",
         }
       );
+      // 记录翻译结果与状态。
       item.summaryCn = payload.summary;
       item.summaryTranslated = payload.translated;
       item.summaryTranslateFailed = false;
       if (payload.error) {
+        // 接口返回错误提示时，也标记为“翻译失败”。
         summaryError.value = payload.error;
         item.summaryTranslateFailed = true;
       }
     } catch (error) {
+      // 兜底：失败时提供空值并标记失败。
       summaryError.value = String(error);
       item.summaryCn = "";
       item.summaryTranslated = false;
@@ -718,6 +805,7 @@ export const useQueryPage = (options: { ensureStatus: (id: number) => ItemStatus
     }
   };
 
+  // 计算查询面板高度并写入 CSS 变量，供布局使用。
   const setQueryPanelHeight = async () => {
     await nextTick();
     const height = queryPanelRef.value?.getBoundingClientRect().height;

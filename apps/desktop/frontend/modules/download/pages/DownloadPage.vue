@@ -1,7 +1,15 @@
 <script setup lang="ts">
+/**
+ * 下载页：
+ * - 展示下载列表与全局速度
+ * - 提供暂停/继续/删除操作
+ */
 import { NButton, NCard, NProgress } from "naive-ui";
 import type { UseDownloadPageReturn } from "../composables/useDownloadPage";
 
+/**
+ * downloads：由 useDownloadPage 提供的状态与操作集合。
+ */
 const props = defineProps<{
   downloads: UseDownloadPageReturn;
 }>();
@@ -10,6 +18,7 @@ const props = defineProps<{
 <template>
   <div class="app-body download-view">
     <NCard title="下载" size="small" class="download-card">
+      <!-- 顶部工具栏：显示总速率 + 批量控制按钮 -->
       <div class="download-toolbar">
         <div v-if="downloads.downloads.value.length" class="download-total-speed">
           <span class="download-total-label">总速率</span>
@@ -46,6 +55,7 @@ const props = defineProps<{
           </NButton>
         </div>
       </div>
+      <!-- 下载列表：逐条渲染下载任务 -->
       <div v-if="downloads.downloads.value.length" class="download-list">
         <div v-for="item in downloads.downloads.value" :key="item.id" class="download-row">
           <div class="download-main">
@@ -60,6 +70,7 @@ const props = defineProps<{
               <span class="pill">{{ item.startedAt }}</span>
               <span v-if="item.path" class="pill path-pill" :title="item.path">{{ item.path }}</span>
             </div>
+            <!-- 下载进度条：仅在有总大小时展示 -->
             <div v-if="item.totalBytes" class="download-progress">
               <NProgress
                 type="line"
@@ -73,6 +84,7 @@ const props = defineProps<{
             </div>
             <div v-if="item.error" class="download-error">{{ item.error }}</div>
           </div>
+          <!-- 单条任务操作区：暂停/继续/删除 -->
           <div class="download-actions">
             <NButton
               size="tiny"

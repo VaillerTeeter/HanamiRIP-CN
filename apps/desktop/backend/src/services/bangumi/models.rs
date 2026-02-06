@@ -1,6 +1,16 @@
+/*
+  这里集中定义“数据模型”。
+  作用：
+  1) 把 Bangumi 返回的 JSON 结构映射成 Rust 类型（用于反序列化）。
+  2) 把后端要返回给前端的结构定义好（用于序列化）。
+  这样前后端交互时就有清晰的“数据契约”。
+*/
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// 分页条目列表：Bangumi 返回的“分页结构”。
+/// total = 总条目数；limit = 每页条数；data = 当前页数据。
 #[derive(Deserialize)]
 pub(crate) struct PagedSubject {
   pub total: u32,
@@ -8,6 +18,8 @@ pub(crate) struct PagedSubject {
   pub data: Vec<Subject>,
 }
 
+/// Bangumi 条目（原始结构）。
+/// 注意：很多字段是可选的，因为 API 可能不返回。
 #[derive(Deserialize)]
 pub(crate) struct Subject {
   pub id: u32,
@@ -19,6 +31,7 @@ pub(crate) struct Subject {
   pub rating: Option<Rating>,
 }
 
+/// 条目图片集合（可能为空）。
 #[derive(Deserialize)]
 pub(crate) struct Images {
   pub common: Option<String>,
@@ -26,11 +39,13 @@ pub(crate) struct Images {
   pub large: Option<String>,
 }
 
+/// 评分结构（有些条目没有评分）。
 #[derive(Deserialize)]
 pub(crate) struct Rating {
   pub score: Option<f64>,
 }
 
+/// 分集分页数据。
 #[derive(Deserialize)]
 pub(crate) struct EpisodePage {
   pub total: u32,
@@ -38,12 +53,14 @@ pub(crate) struct EpisodePage {
   pub data: Vec<Episode>,
 }
 
+/// 分集信息：只用到“播出日期”和“播出状态”。
 #[derive(Deserialize)]
 pub(crate) struct Episode {
   pub airdate: Option<String>,
   pub status: Option<String>,
 }
 
+/// 条目详情（用于提取标签、原作、别名等）。
 #[derive(Deserialize)]
 pub(crate) struct SubjectDetail {
   pub summary: Option<String>,
@@ -52,17 +69,21 @@ pub(crate) struct SubjectDetail {
   pub meta_tags: Option<Vec<String>>,
 }
 
+/// 标准标签结构。
 #[derive(Deserialize)]
 pub(crate) struct SubjectTag {
   pub name: String,
 }
 
+/// infobox 里的一个键值项。
+/// value 是通用 JSON 类型，可能是字符串、数组或对象。
 #[derive(Deserialize)]
 pub(crate) struct InfoboxItem {
   pub key: String,
   pub value: Value,
 }
 
+/// 人物信息（制作人员/声优等）。
 #[derive(Deserialize)]
 pub(crate) struct SubjectPersonItem {
   pub id: u32,
@@ -70,6 +91,9 @@ pub(crate) struct SubjectPersonItem {
   pub relation: Option<String>,
 }
 
+/// 人物接口返回可能是两种形态：
+/// - 直接列表
+/// - 带分页信息的结构
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub(crate) enum SubjectPersonPayload {
@@ -81,6 +105,7 @@ pub(crate) enum SubjectPersonPayload {
   },
 }
 
+/// 角色信息。
 #[derive(Deserialize)]
 pub(crate) struct SubjectCharacterItem {
   pub id: u32,
@@ -89,6 +114,7 @@ pub(crate) struct SubjectCharacterItem {
   pub relation: Option<String>,
 }
 
+/// 角色接口返回结构（同样可能是列表或分页）。
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub(crate) enum SubjectCharacterPayload {
@@ -100,6 +126,8 @@ pub(crate) enum SubjectCharacterPayload {
   },
 }
 
+/// 前端使用的“季度番剧条目”。
+/// 使用 camelCase 以符合前端常用命名习惯。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeasonAnime {
@@ -113,6 +141,7 @@ pub struct SeasonAnime {
   pub url: String,
 }
 
+/// 某个月的番剧列表及统计信息。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeasonMonth {
@@ -122,6 +151,7 @@ pub struct SeasonMonth {
   pub list: Vec<SeasonAnime>,
 }
 
+/// 某一季的完整响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SeasonResponse {
@@ -132,6 +162,7 @@ pub struct SeasonResponse {
   pub months: Vec<SeasonMonth>,
 }
 
+/// 原作信息响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectOriginResponse {
@@ -139,6 +170,7 @@ pub struct SubjectOriginResponse {
   pub origin: Option<String>,
 }
 
+/// 已播出集数统计响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectAiredResponse {
@@ -147,6 +179,7 @@ pub struct SubjectAiredResponse {
   pub total_count: u32,
 }
 
+/// 单个制作人员信息（输出给前端）。
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StaffPersonResponse {
@@ -155,6 +188,7 @@ pub struct StaffPersonResponse {
   pub url: String,
 }
 
+/// 制作人员分组（按职位）。
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StaffGroupResponse {
@@ -162,6 +196,7 @@ pub struct StaffGroupResponse {
   pub people: Vec<StaffPersonResponse>,
 }
 
+/// 制作人员列表响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectStaffResponse {
@@ -169,6 +204,7 @@ pub struct SubjectStaffResponse {
   pub groups: Vec<StaffGroupResponse>,
 }
 
+/// 角色链接信息（用于前端展示）。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterLinkResponse {
@@ -178,6 +214,7 @@ pub struct CharacterLinkResponse {
   pub relation: Option<String>,
 }
 
+/// 角色列表响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectCharactersResponse {
@@ -185,6 +222,7 @@ pub struct SubjectCharactersResponse {
   pub characters: Vec<CharacterLinkResponse>,
 }
 
+/// 别名列表响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectAliasesResponse {
@@ -192,6 +230,7 @@ pub struct SubjectAliasesResponse {
   pub aliases: Vec<String>,
 }
 
+/// 简介翻译响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectSummaryResponse {
@@ -201,6 +240,7 @@ pub struct SubjectSummaryResponse {
   pub error: Option<String>,
 }
 
+/// 筛选标签响应（类型/地区/受众）。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectFiltersResponse {
@@ -210,6 +250,7 @@ pub struct SubjectFiltersResponse {
   pub audiences: Vec<String>,
 }
 
+/// 条目简要信息响应。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubjectBriefResponse {

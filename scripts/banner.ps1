@@ -1,4 +1,6 @@
+# 定义一个函数：用于输出项目的 ASCII 艺术 Logo，方便脚本启动时显示品牌标识。
 function Write-HanamiBanner {
+  # 使用 here-string 保存多行 ASCII 文本，避免逐行拼接。
     $banner = @'
                ________________                                 ___           ___           ___           ___           ___                       ___                       ___
               |                |_____    __                    /\__\         /\  \         /\__\         /\  \         /\__\          ___        /\  \          ___        /\  \
@@ -13,7 +15,9 @@ function Write-HanamiBanner {
 `b,  ,P  `b,  ,P                                               \/__/         \/__/         \/__/         \/__/         \/__/                     \|__|
   """`     """`
 '@
+    # 输出到控制台，并设置为洋红色，提升可见度。
     Write-Host $banner -ForegroundColor Magenta
 }
 
+  # 脚本入口：直接调用函数，打印 Banner。
   Write-HanamiBanner

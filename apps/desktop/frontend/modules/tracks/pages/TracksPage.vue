@@ -1,15 +1,27 @@
 <script setup lang="ts">
+/**
+ * 轨道工坊页面：
+ * - 选择媒体文件并解析轨道信息
+ * - 指定默认语言并筛选要混流的轨道
+ * - 将任务加入混流队列并执行
+ */
 import { NButton, NCard, NCheckbox, NProgress, NSelect } from "naive-ui";
 import type { UseTracksPageReturn } from "../composables/useTracksPage";
 
+/**
+ * tracks：轨道页状态与操作方法。
+ *   - 包含文件列表、解析结果、队列状态等
+ */
 const props = defineProps<{
   tracks: UseTracksPageReturn;
 }>();
 </script>
 
 <template>
+  <!-- 轨道工坊整体布局 -->
   <div class="app-body download-view">
     <NCard title="轨道工坊" size="small" class="download-card">
+      <!-- 混流队列操作栏：添加任务 + 提示信息 -->
       <div class="tracks-mix-bar">
         <NButton type="primary" size="small" :loading="tracks.trackMixLoading.value" @click="tracks.enqueueMixTask">
           添加到混流任务队列
@@ -17,6 +29,7 @@ const props = defineProps<{
         <span v-if="tracks.trackMixResult.value" class="tracks-mix-success">{{ tracks.trackMixResult.value }}</span>
         <span v-if="tracks.trackMixError.value" class="tracks-mix-error">{{ tracks.trackMixError.value }}</span>
       </div>
+      <!-- 默认语言选择：影响后端写入轨道语言标签 -->
       <div class="tracks-mix-lang">
         <span class="tracks-mix-lang-label">默认语言</span>
         <div class="tracks-mix-lang-item">
@@ -53,6 +66,7 @@ const props = defineProps<{
           />
         </div>
       </div>
+      <!-- 轨道解析与任务列表 -->
       <div class="tracks-list">
         <div class="tracks-section">
           <div class="tracks-header">
@@ -71,6 +85,7 @@ const props = defineProps<{
             </div>
           </div>
           <div class="tracks-body">
+            <!-- 已选视频文件展示 -->
             <div class="tracks-files" v-if="tracks.trackFiles.value.video.length">
               <div v-for="file in tracks.trackFiles.value.video" :key="file.id" class="tracks-file">
                 <span class="tracks-file-name">{{ file.name }}</span>
@@ -78,11 +93,14 @@ const props = defineProps<{
                 <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
               </div>
             </div>
+            <!-- 未选择文件时的提示 -->
             <p v-else class="download-empty">尚未添加视频文件。</p>
             <div v-if="tracks.trackErrors.value.video" class="tracks-error">{{ tracks.trackErrors.value.video }}</div>
+            <!-- 解析进度条 -->
             <div v-if="tracks.trackLoading.value.video" class="tracks-progress">
               <NProgress type="line" :percentage="tracks.trackProgress.value.video" :show-indicator="true" :height="8" />
             </div>
+            <!-- 解析结果：每个轨道可勾选是否参与混流 -->
             <div v-if="tracks.trackInfos.value.video.length" class="tracks-info">
               <div v-for="group in tracks.trackInfos.value.video" :key="group.file.id" class="tracks-info-group">
                 <div class="tracks-info-file">{{ group.file.name }}</div>
@@ -125,6 +143,7 @@ const props = defineProps<{
             </div>
           </div>
           <div class="tracks-body">
+            <!-- 已选音频文件展示 -->
             <div class="tracks-files" v-if="tracks.trackFiles.value.audio.length">
               <div v-for="file in tracks.trackFiles.value.audio" :key="file.id" class="tracks-file">
                 <span class="tracks-file-name">{{ file.name }}</span>
@@ -132,11 +151,14 @@ const props = defineProps<{
                 <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
               </div>
             </div>
+            <!-- 未选择文件时的提示 -->
             <p v-else class="download-empty">尚未添加音频文件。</p>
             <div v-if="tracks.trackErrors.value.audio" class="tracks-error">{{ tracks.trackErrors.value.audio }}</div>
+            <!-- 解析进度条 -->
             <div v-if="tracks.trackLoading.value.audio" class="tracks-progress">
               <NProgress type="line" :percentage="tracks.trackProgress.value.audio" :show-indicator="true" :height="8" />
             </div>
+            <!-- 解析结果：每个轨道可勾选是否参与混流 -->
             <div v-if="tracks.trackInfos.value.audio.length" class="tracks-info">
               <div v-for="group in tracks.trackInfos.value.audio" :key="group.file.id" class="tracks-info-group">
                 <div class="tracks-info-file">{{ group.file.name }}</div>
@@ -179,6 +201,7 @@ const props = defineProps<{
             </div>
           </div>
           <div class="tracks-body">
+            <!-- 已选字幕文件展示 -->
             <div class="tracks-files" v-if="tracks.trackFiles.value.subtitle.length">
               <div v-for="file in tracks.trackFiles.value.subtitle" :key="file.id" class="tracks-file">
                 <span class="tracks-file-name">{{ file.name }}</span>
@@ -186,11 +209,14 @@ const props = defineProps<{
                 <span class="tracks-file-path" :title="file.path">{{ file.path }}</span>
               </div>
             </div>
+            <!-- 未选择文件时的提示 -->
             <p v-else class="download-empty">尚未添加字幕文件。</p>
             <div v-if="tracks.trackErrors.value.subtitle" class="tracks-error">{{ tracks.trackErrors.value.subtitle }}</div>
+            <!-- 解析进度条 -->
             <div v-if="tracks.trackLoading.value.subtitle" class="tracks-progress">
               <NProgress type="line" :percentage="tracks.trackProgress.value.subtitle" :show-indicator="true" :height="8" />
             </div>
+            <!-- 解析结果：每个轨道可勾选是否参与混流 -->
             <div v-if="tracks.trackInfos.value.subtitle.length" class="tracks-info">
               <div v-for="group in tracks.trackInfos.value.subtitle" :key="group.file.id" class="tracks-info-group">
                 <div class="tracks-info-file">{{ group.file.name }}</div>
@@ -234,12 +260,15 @@ const props = defineProps<{
             </div>
           </div>
           <div class="tracks-body">
+            <!-- 队列为空提示 -->
             <p v-if="!tracks.mixQueue.value.length" class="download-empty">暂无混流任务。</p>
+            <!-- 队列列表：点击可查看任务详情 -->
             <div v-else class="mix-queue-list">
               <div v-for="item in tracks.mixQueue.value" :key="item.id" class="mix-queue-row" @click.stop="tracks.openMixTaskDetail(item)">
                 <span class="mix-queue-id">#{{ item.id }}</span>
                 <span class="mix-queue-time">{{ item.createdAt }}</span>
                 <span class="mix-queue-output" :title="item.outputPath">{{ item.outputPath }}</span>
+                <!-- 状态展示：queued/running/success/failed -->
                 <span class="mix-queue-status" :data-status="item.status">
                   {{
                     item.status === 'queued'

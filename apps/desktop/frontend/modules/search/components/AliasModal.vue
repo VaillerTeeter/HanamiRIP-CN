@@ -1,6 +1,14 @@
 <script setup lang="ts">
+/**
+ * 别名选择弹窗：
+ * - 展示可选别名列表
+ * - 返回用户勾选结果
+ */
 import { NButton, NCheckbox, NCheckboxGroup, NModal } from "naive-ui";
 
+/**
+ * props：控制显示状态、候选列表与回调。
+ */
 const props = defineProps<{
   show: boolean;
   pendingTrackedName: string;
@@ -11,6 +19,9 @@ const props = defineProps<{
   onConfirm: () => void;
 }>();
 
+/**
+ * emit：同步 show 与 aliasSelected。
+ */
 const emit = defineEmits<{
   (e: "update:show", value: boolean): void;
   (e: "update:aliasSelected", value: string[]): void;
@@ -18,6 +29,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
+  <!-- 别名选择弹窗容器 -->
   <NModal
     :show="props.show"
     preset="card"
@@ -27,6 +39,7 @@ const emit = defineEmits<{
     @update:show="(value: boolean) => emit('update:show', value)"
   >
     <div class="alias-modal-body">
+      <!-- 标题：显示当前条目名称 -->
       <p class="alias-title">为 {{ props.pendingTrackedName || "该番剧" }} 选择要加入的名称</p>
       <p v-if="props.aliasLoading" class="alias-hint">正在获取别名...</p>
       <template v-else>
