@@ -1,1 +1,36 @@
 
+{
+	"name": "hanamirip-cn",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"predev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/banner.ps1",
+		"dev": "vite --config apps/desktop/vite.config.ts",
+		"clean": "yarn predev && node scripts/clean.js",
+		"setup:env": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-env.ps1",
+		"debug": "powershell -Command \"$env:CARGO_TARGET_DIR='../../../build/tauri-target'; tauri dev --config apps/desktop/backend/tauri.conf.json\"",
+		"build:baidu-dll": "yarn predev && powershell -Command \"$env:CARGO_TARGET_DIR='build/baidu_verify-build\\windows'; cargo build --release --manifest-path crates/baidu_verify/Cargo.toml; New-Item -ItemType Directory -Force -Path 'dist/baidu_verify\\windows' | Out-Null; Copy-Item 'build/baidu_verify-build\\windows\\release\\baidu_verify.dll' -Destination 'dist/baidu_verify\\windows\\baidu_verify.dll' -Force\"",
+		"build:windows:x64": "powershell -Command \"$env:CARGO_TARGET_DIR='../../../build/tauri-target'; tauri build --config apps/desktop/backend/tauri.conf.json --bundles nsis --target x86_64-pc-windows-msvc\"",
+		"build:windows:x86": "powershell -Command \"$env:CARGO_TARGET_DIR='../../../build/tauri-target'; tauri build --config apps/desktop/backend/tauri.conf.json --bundles nsis --target i686-pc-windows-msvc\"",
+		"build:windows": "yarn predev && yarn build:windows:x64 && yarn build:windows:x86",
+		"package:windows:x64": "powershell -Command \"New-Item -ItemType Directory -Force -Path 'dist\\windows' | Out-Null; $nsis = Get-ChildItem 'build\\tauri-target\\x86_64-pc-windows-msvc\\release\\bundle\\nsis\\*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($nsis) { Copy-Item $nsis.FullName -Destination 'dist\\windows\\HanamiRIP-CN_x64-setup.exe' -Force } else { Write-Error 'NSIS installer not found (x64)'; exit 1 }\"",
+		"package:windows:x86": "powershell -Command \"New-Item -ItemType Directory -Force -Path 'dist\\windows' | Out-Null; $nsis = Get-ChildItem 'build\\tauri-target\\i686-pc-windows-msvc\\release\\bundle\\nsis\\*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($nsis) { Copy-Item $nsis.FullName -Destination 'dist\\windows\\HanamiRIP-CN_x86-setup.exe' -Force } else { Write-Error 'NSIS installer not found (x86)'; exit 1 }\"",
+		"package:windows": "yarn predev && yarn package:windows:x64 && yarn package:windows:x86"
+	},
+	"dependencies": {
+		"@tauri-apps/api": "^2.0.0",
+		"@tauri-apps/plugin-dialog": "^2.0.0",
+		"@tauri-apps/plugin-fs": "^2.0.0",
+		"naive-ui": "^2.39.0",
+		"vue": "^3.4.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"@tauri-apps/cli": "^2.0.0",
+		"@vitejs/plugin-vue": "^5.0.0",
+		"typescript": "^5.6.0",
+		"vite": "^5.4.0"
+	}
+}
+

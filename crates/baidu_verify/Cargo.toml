@@ -1,10 +1,13 @@
+# 这是用于生成动态库的 crate 配置。
 [package]
+# crate 名称（用于依赖引用）。
 name = "baidu_verify"
+# 版本号（语义化版本）。
 version = "0.1.0"
+# Rust edition 版本。
 edition = "2021"
 
+# 库类型配置：指定生成 cdylib 以供外部程序/动态加载使用。
 [lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-# 添加你的百度验证库依赖
+# cdylib 会生成 C ABI 兼容的动态库（.dll/.so/.dylib）。
+crate-type = ["cdylib"]
