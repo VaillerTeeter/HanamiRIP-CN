@@ -36,17 +36,11 @@ const emit = defineEmits<{ (e: "update:show", value: boolean): void }>();
 <template>
     <!-- 本行目的：人员信息弹窗主体，显示与隐藏由 props.show 控制。 -->
     <a-modal
-        <!-- 本行目的：绑定弹窗可见性。 -->
         :visible="props.show"
-        <!-- 本行目的：绑定弹窗标题的国际化文案。 -->
         :title="t('staff.title', props.locale)"
-        <!-- 本行目的：设置弹窗宽度为 720 像素。 -->
         :width="720"
-        <!-- 本行目的：限制弹窗内容区最大高度并允许滚动。 -->
         :body-style="{ maxHeight: '70vh', overflow: 'auto' }"
-        <!-- 本行目的：禁用默认底部按钮区，使用纯内容展示。 -->
         :footer="false"
-        <!-- 本行目的：监听可见性更新并向父组件透传。 -->
         @update:visible="(value: boolean) => emit('update:show', value)"
     >
         <!-- 本行目的：弹窗内容容器。 -->
@@ -85,9 +79,7 @@ const emit = defineEmits<{ (e: "update:show", value: boolean): void }>();
                                 role="link"
                                 tabindex="0"
                                 style="color: #16a34a !important; -webkit-text-fill-color: #16a34a !important"
-                                <!-- 本行目的：点击人员名时打开其外链。 -->
                                 @click="props.openExternalLink(person.url)"
-                                <!-- 本行目的：按下回车时同样触发打开外链，保障键盘可访问性。 -->
                                 @keydown.enter.prevent="props.openExternalLink(person.url)"
                             >
                                 <!-- 本行目的：显示人员名称。 -->

@@ -219,16 +219,14 @@ function Install-RustTargets {
         $targets = rustup target list 2>$null
         # 变量：$hasX64 | 含义：是否已安装 x86_64 目标 | 类型：Object/Boolean 语义 | 作用域：try 块内部
         # 通过筛选包含 installed 的目标行判断 64 位目标状态。
-        $hasX64 = $targets
-            | Where-Object {
-                $_ -like "*x86_64-pc-windows-msvc*" -and $_ -like "*installed*"
-            }
+        $hasX64 = $targets | Where-Object {
+            $_ -like "*x86_64-pc-windows-msvc*" -and $_ -like "*installed*"
+        }
         # 变量：$hasX86 | 含义：是否已安装 i686 目标 | 类型：Object/Boolean 语义 | 作用域：try 块内部
         # 判断 32 位目标是否已安装。
-        $hasX86 = $targets
-            | Where-Object {
-                $_ -like "*i686-pc-windows-msvc*" -and $_ -like "*installed*"
-            }
+        $hasX86 = $targets | Where-Object {
+            $_ -like "*i686-pc-windows-msvc*" -and $_ -like "*installed*"
+        }
 
         # 已安装 64 位目标则直接提示。
         if ($hasX64) {
@@ -698,11 +696,9 @@ function Install-FFmpegTools {
         # Get-ChildItem -Directory获取所有子目录
         # Where-Object过滤名称匹配的目录
         # Select-Object -First 1选择第一个匹配项
-        $extracted = Get-ChildItem -Path $tempDir -Directory
-            | Where-Object {
-                $_.Name -like "ffmpeg-*"
-            }
-            | Select-Object -First 1
+        $extracted = Get-ChildItem -Path $tempDir -Directory | Where-Object {
+            $_.Name -like "ffmpeg-*"
+        } | Select-Object -First 1
         # 检查是否找到解压目录
         if (-not $extracted) {
             # 未找到，抛出异常
@@ -812,11 +808,9 @@ function Install-MkvToolNixTools {
 
         # 变量：$latest | 含义：解析出的最新版本号 | 类型：String | 作用域：try 块内部
         # 将版本按语义版本降序排序并取最新。
-        $latest = $versions
-            | Sort-Object {
-                [version] $_
-            } -Descending
-            | Select-Object -First 1
+        $latest = $versions | Sort-Object {
+            [version] $_
+        } -Descending | Select-Object -First 1
         # 变量：$baseUrl | 含义：最新版本目录基地址 | 类型：String | 作用域：try 块内部
         # 组合最新版本目录地址。
         $baseUrl = "https://mkvtoolnix.download/windows/releases/$latest/"

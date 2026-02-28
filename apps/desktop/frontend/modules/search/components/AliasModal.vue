@@ -39,15 +39,10 @@ const emit = defineEmits<{
 <template>
     <!-- 本行目的：别名选择弹窗主体。 -->
     <a-modal
-        <!-- 本行目的：绑定弹窗可见状态。 -->
         :visible="props.show"
-        <!-- 本行目的：绑定弹窗标题文案。 -->
         :title="t('search.alias.title', props.locale)"
-        <!-- 本行目的：设置弹窗宽度。 -->
         :width="520"
-        <!-- 本行目的：隐藏默认底部按钮，改用自定义操作区。 -->
         :footer="false"
-        <!-- 本行目的：转发可见性变化给父组件。 -->
         @update:visible="(value: boolean) => emit('update:show', value)"
     >
         <!-- 本行目的：弹窗内容容器。 -->
