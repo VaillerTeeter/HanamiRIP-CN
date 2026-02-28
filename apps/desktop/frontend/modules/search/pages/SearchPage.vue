@@ -1,206 +1,345 @@
 <script setup lang="ts">
-/**
- * 搜索页面：
- * - 通过“逻辑运算 + 关键词”拼出最终查询语句
- * - 支持从追番条目中提取别名进行搜索
- * - 支持打开搜索结果、并直接发起下载
- */
-import { NButton, NCard, NInput, NSelect, NTag } from "naive-ui";
+/** 文件：SearchPage.vue | 用途：渲染搜索页的关键词构建、结果展示与下载入口界面 | 关键对象：props, hasInlineResults, trackedOptionsView, AliasModal */
+// 本行目的：引入 computed，用于从现有状态派生模板展示数据。
+import { computed } from "vue";
+// 本行目的：引入国际化函数和语言键类型，用于多语言文案渲染。
+import { t, type LocaleKey } from "../../../shared/i18n/messages";
+// 本行目的：引入别名选择弹窗组件，用于确认追踪条目的别名关键词。
+import AliasModal from "../components/AliasModal.vue";
+// 本行目的：引入搜索组合式返回类型，约束父层传入的 search 对象结构。
 import type { UseSearchPageReturn } from "../composables/useSearchPage";
-import type { SearchResult } from "../types/search";
-import type { DownloadItem } from "../../download/types/download";
+// 本行目的：引入搜索结果和逻辑运算符类型，确保事件参数类型安全。
+import type { SearchResult, LogicOp } from "../types/search";
 
-/**
- * search：搜索页状态与操作
- *   - 包含搜索词列表、搜索 URL、解析后的结果等
- * openExternalLink：打开外链（桌面端优先走 Tauri）
- * handleDownloadClick：点击磁链/种子下载
- */
+// 变量：props | 含义：父组件传入的页面上下文和回调能力集合 | 类型：由 defineProps 推断的对象类型 | 作用域：SearchPage 组件内
+/** 函数：defineProps | 输入：locale、search、外链打开回调、下载回调 | 输出：只读 props 对象 | 可能失败：无（编译期类型约束） */
+// 本行目的：声明组件入参，集中接收语言、搜索状态与对外操作方法。
 const props = defineProps<{
-  search: UseSearchPageReturn;
-  openExternalLink: (url?: string | null) => void | Promise<void>;
-  handleDownloadClick: (item: SearchResult, kind: DownloadItem["kind"], link?: string) => void | Promise<void>;
+    // 本行目的：声明当前界面使用的语言键。
+    locale: LocaleKey;
+    // 本行目的：声明搜索页面状态与行为集合。
+    search: UseSearchPageReturn;
+    // 本行目的：声明打开外部链接的统一回调。
+    openExternalLink: (url?: string | null) => void | Promise<void>;
+    // 本行目的：声明把搜索结果提交到下载模块的统一回调。
+    handleDownloadClick: (item: SearchResult, kind: "magnet" | "torrent", link?: string) => void | Promise<void>;
 }>();
+
+// 变量：updateAliasModalVisible | 含义：同步别名弹窗显示状态到搜索状态对象 | 类型：(value: boolean) => void | 作用域：SearchPage 组件内
+/** 函数：updateAliasModalVisible | 输入：弹窗显示布尔值 | 输出：无（写入响应式状态） | 可能失败：无 */
+// 本行目的：封装子组件 show 双向绑定的更新逻辑。
+const updateAliasModalVisible = (value: boolean) => {
+    // 本行目的：把子组件更新值写回组合式状态。
+    props.search.aliasModalVisible.value = value;
+};
+
+// 变量：updateAliasSelected | 含义：同步别名弹窗勾选结果到搜索状态对象 | 类型：(value: string[]) => void | 作用域：SearchPage 组件内
+/** 函数：updateAliasSelected | 输入：用户勾选的别名数组 | 输出：无（写入响应式状态） | 可能失败：无 */
+// 本行目的：封装子组件 aliasSelected 双向绑定的更新逻辑。
+const updateAliasSelected = (value: string[]) => {
+    // 本行目的：把子组件勾选结果写回组合式状态。
+    props.search.aliasSelected.value = value;
+};
+
+// 变量：opLabel | 含义：把逻辑运算符值转换为可展示文案 | 类型：(op: LogicOp) => string | 作用域：SearchPage 组件内
+/** 函数：opLabel | 输入：逻辑运算符 and/or/not | 输出：当前语言下的逻辑标签文案 | 可能失败：无（i18n key 固定） */
+// 本行目的：统一生成标签中显示的逻辑前缀文本。
+const opLabel = (op: LogicOp) => {
+    // 本行目的：处理 and 逻辑标签。
+    if (op === "and") return t("search.logic.and", props.locale);
+    // 本行目的：处理 or 逻辑标签。
+    if (op === "or") return t("search.logic.or", props.locale);
+    // 本行目的：其余情况返回 not 逻辑标签。
+    return t("search.logic.not", props.locale);
+};
+
+// 变量：hasInlineResults | 含义：控制是否显示内联结果区域 | 类型：ComputedRef<boolean> | 作用域：SearchPage 组件内
+/** 函数：hasInlineResults | 输入：无（读取 search 多个状态） | 输出：是否展示结果区域的布尔值 | 可能失败：无（纯计算） */
+// 本行目的：根据加载、错误、结果和 HTML 任一命中来决定显示结果区。
+const hasInlineResults = computed(() => {
+    // 变量：search | 含义：props.search 的本地引用，减少重复访问链 | 类型：UseSearchPageReturn | 作用域：computed 回调内
+    // 本行目的：缓存搜索状态对象，提升表达式可读性。
+    const search = props.search;
+    // 本行目的：任一状态存在时返回 true，触发结果区域渲染。
+    return search.searchLoading.value || search.searchError.value || search.searchResults.value.length > 0 || Boolean(search.searchHtml.value);
+});
+
+// 变量：trackedOptionsView | 含义：供下拉框渲染的本地化分组选项 | 类型：ComputedRef<Array<{label: string; options: {label: string; value: number}[]}>> | 作用域：SearchPage 组件内
+/** 函数：trackedOptionsView | 输入：无（读取 trackedOptions 与 locale） | 输出：过滤空组后的本地化选项列表 | 可能失败：无（纯计算） */
+// 本行目的：把组合式中的 labelKey 转成当前语言文案，并过滤空分组。
+const trackedOptionsView = computed(() =>
+    // 本行目的：读取追踪分组选项并逐组转换显示结构。
+    props.search.trackedOptions.value
+        // 本行目的：把每组的 labelKey 翻译为当前语言文本。
+        .map((group) => ({
+            // 本行目的：生成当前分组显示标题。
+            label: t(group.labelKey, props.locale),
+            // 本行目的：保留原有选项数据。
+            options: group.options,
+        }))
+        // 本行目的：过滤掉没有选项的空分组，避免渲染无意义标题。
+        .filter((group) => group.options.length)
+);
 </script>
 
 <template>
-  <!-- 搜索主面板：所有交互入口的容器 -->
-  <div class="app-body search-view">
-    <NCard size="small" class="search-panel">
-      <template #header>
-        <div class="search-card-header">
-          <span>搜索资源</span>
-          <!-- 提示：逻辑只影响“之后添加”的词条 -->
-          <span class="search-hint header-hint">先选逻辑，再添加短语或番剧；逻辑只对后续新增项生效</span>
-        </div>
-      </template>
-      <div class="search-controls">
-        <!-- 逻辑选择：与/或/非，会影响后续新增词条 -->
-        <div class="search-row">
-          <span class="search-label">逻辑</span>
-          <div class="search-button-group logic-group">
-            <NButton
-              v-for="logic in search.logicOptions"
-              :key="logic.value"
-              secondary
-              size="small"
-              :type="search.activeLogic.value === logic.value ? 'primary' : 'default'"
-              @click="search.activeLogic.value = logic.value"
-            >
-              {{ logic.label }}
-            </NButton>
-          </div>
-        </div>
-
-        <!-- 预设关键词按钮：一键追加常用筛选词 -->
-        <div class="search-row">
-          <span class="search-label">预设</span>
-          <div class="search-button-group">
-            <NButton
-              v-for="phrase in search.presetPhrases"
-              :key="phrase"
-              size="small"
-              secondary
-              @click="search.handleAddPreset(phrase)"
-            >
-              {{ phrase }}
-            </NButton>
-          </div>
-        </div>
-
-           <!-- 追番选择 + 自定义输入：
-             追番会触发别名弹窗，自定义则直接加入关键词 -->
-        <div class="search-row compact">
-          <span class="search-label">番剧</span>
-          <!-- 追番选择：会在逻辑层追加一组别名关键词 -->
-          <NSelect
-            :value="search.trackedSelection.value"
-            :options="search.trackedOptions.value"
-            placeholder="选择正在追番/补番/已完番剧"
-            clearable
-            @update:value="(value: number | null) => {
-              search.trackedSelection.value = value as number | null;
-              search.handleSelectTracked(value as number | null);
-            }"
-          />
-          <!-- 自定义关键词输入框：回车或“添加”按钮提交 -->
-          <NInput
-            :value="search.customSearchInput.value"
-            placeholder="输入自定义精确短语"
-            clearable
-            @update:value="(value: string) => (search.customSearchInput.value = value)"
-            @keyup.enter="search.handleAddCustom"
-            class="search-input-flex"
-          />
-          <NButton type="primary" @click="search.handleAddCustom">添加</NButton>
-        </div>
-
-        <!-- 已选关键词展示：可逐个关闭删除 -->
-        <div class="search-row search-tags" v-if="search.searchTerms.value.length">
-          <span class="search-label">已选</span>
-          <div class="search-tag-list">
-            <NTag
-              v-for="(term, idx) in search.searchTerms.value"
-              :key="idx"
-              size="small"
-              closable
-              @close="search.removeSearchTerm(Number(idx))"
-            >
-              <span class="term-op">{{ term.op === 'and' ? '与' : term.op === 'or' ? '或' : '非' }}</span>
-              <span class="term-value">{{ term.value }}</span>
-            </NTag>
-          </div>
-        </div>
-
-           <!-- 拼接结果预览 + 打开搜索：
-             这里显示最终拼接的搜索语句 -->
-        <div class="search-row">
-          <span class="search-label">拼接结果</span>
-          <div class="search-preview">
-            <div class="search-query">{{ search.searchQuery.value || '（尚未添加关键词）' }}</div>
-          </div>
-          <NButton type="primary" :disabled="!search.searchQuery.value" @click="search.openSearch">打开搜索</NButton>
-        </div>
-
-        <!-- 搜索结果区域：
-             1) 有解析结果时显示列表
-             2) 无解析结果时显示 iframe 预览
-             3) 失败/加载状态显示提示 -->
-        <div
-          v-if="search.searchLoading.value || search.searchError.value || search.searchResults.value.length || search.searchHtml.value"
-          class="search-inline-results"
-        >
-          <div class="search-result-header">
-            <span>搜索结果</span>
-            <NButton size="tiny" secondary @click="search.clearSearchResults">收起</NButton>
-          </div>
-          <div class="search-open-modal">
-            <!-- 目标 URL：可复制或点击打开 -->
-            <p class="search-modal-row">
-              <span class="search-modal-label">URL：</span>
-              <a
-                :href="search.searchUrl.value"
-                target="_blank"
-                rel="noreferrer"
-                @click.prevent="props.openExternalLink(search.searchUrl.value)"
-              >
-                {{ search.searchUrl.value }}
-              </a>
-            </p>
-            <!-- 解析后的结果列表 -->
-            <div v-if="search.searchResults.value.length" class="search-result-list">
-              <div class="search-result-row" v-for="item in search.searchResults.value" :key="item.detailUrl || item.title">
-                <div class="sr-name">
-                  <a
-                    :href="item.detailUrl || item.magnet || item.download"
-                    target="_blank"
-                    rel="noreferrer"
-                    @click.prevent="props.openExternalLink(item.detailUrl || item.magnet || item.download)"
-                  >
-                    {{ item.title }}
-                  </a>
-                  <div class="sr-meta" v-if="item.size || item.date">
-                    <span v-if="item.size">{{ item.size }}</span>
-                    <span v-if="item.date">{{ item.date }}</span>
-                  </div>
+    <!-- 本行目的：定义搜索页面主体容器，承接页面布局样式。 -->
+    <div class="app-body search-view">
+        <!-- 本行目的：使用卡片承载搜索配置与结果内容。 -->
+        <a-card class="search-panel" size="small">
+            <!-- 本行目的：自定义卡片标题区域。 -->
+            <template #title>
+                <!-- 本行目的：标题栏内展示主标题和辅助提示。 -->
+                <div class="search-card-header">
+                    <!-- 本行目的：显示搜索页主标题。 -->
+                    <span>{{ t("search.title", props.locale) }}</span>
+                    <!-- 本行目的：显示标题旁的使用提示文案。 -->
+                    <span class="search-hint header-hint">
+                        <!-- 本行目的：渲染多语言提示文本。 -->
+                        {{ t("search.hint", props.locale) }}
+                    </span>
                 </div>
-                <!-- 下载入口：磁链/种子（如果存在） -->
-                <div class="sr-links">
-                  <NButton
-                    v-if="item.magnet"
-                    text
-                    type="primary"
-                    size="small"
-                    @click="props.handleDownloadClick(item, 'magnet', item.magnet)"
-                  >
-                    磁链
-                  </NButton>
-                  <NButton
-                    v-if="item.download"
-                    text
-                    type="primary"
-                    size="small"
-                    @click="props.handleDownloadClick(item, 'torrent', item.download)"
-                  >
-                    种子
-                  </NButton>
+            </template>
+            <!-- 本行目的：包裹全部搜索配置区与结果区。 -->
+            <div class="search-controls">
+                <!-- 本行目的：逻辑运算符选择行。 -->
+                <div class="search-row">
+                    <!-- 本行目的：显示逻辑选择标签文本。 -->
+                    <span class="search-label">{{ t("search.logic.label", props.locale) }}</span>
+                    <!-- 本行目的：容纳 and/or/not 切换按钮组。 -->
+                    <div class="search-button-group logic-group">
+                        <!-- 本行目的：遍历逻辑选项并渲染按钮（键/尺寸/激活样式/点击切换逻辑）。 -->
+                        <a-button
+                            v-for="logic in props.search.logicOptions"
+                            :key="logic.value"
+                            size="mini"
+                            :type="props.search.activeLogic.value === logic.value ? 'primary' : 'outline'"
+                            @click="props.search.activeLogic.value = logic.value"
+                        >
+                            <!-- 本行目的：显示逻辑选项的本地化文案。 -->
+                            {{ t(logic.labelKey, props.locale) }}
+                        </a-button>
+                    </div>
                 </div>
-              </div>
+                <!-- 本行目的：预置关键词快捷添加行。 -->
+                <div class="search-row">
+                    <!-- 本行目的：显示预置关键词标签文本。 -->
+                    <span class="search-label">{{ t("search.preset.label", props.locale) }}</span>
+                    <!-- 本行目的：容纳预置关键词按钮组。 -->
+                    <div class="search-button-group">
+                        <!-- 本行目的：遍历预置词并渲染快速添加按钮（键/尺寸/点击添加）。 -->
+                        <a-button
+                            v-for="phrase in props.search.presetPhrases"
+                            :key="phrase"
+                            size="mini"
+                            @click="props.search.handleAddPreset(phrase)"
+                        >
+                            <!-- 本行目的：展示预置词文本。 -->
+                            {{ phrase }}
+                        </a-button>
+                    </div>
+                </div>
+                <!-- 本行目的：追踪条目选择 + 自定义关键词输入行。 -->
+                <div class="search-row compact">
+                    <!-- 本行目的：显示追踪条目选择标签。 -->
+                    <span class="search-label">{{ t("search.anime.label", props.locale) }}</span>
+                    <!-- 本行目的：渲染追踪条目分组下拉框。 -->
+                    <!-- 本行目的：下拉框属性包含当前值、占位、允许清空与更新回调。 -->
+                    <a-select
+                        :model-value="props.search.trackedSelection.value"
+                        :placeholder="t('search.anime.placeholder', props.locale)"
+                        allow-clear
+                        @update:modelValue="
+                            (value: number | null) => {
+                                // 本行目的：立即同步下拉选择到搜索状态。
+                                props.search.trackedSelection.value = value as number | null;
+                                // 本行目的：触发追踪选择处理（可能打开别名弹窗）。
+                                props.search.handleSelectTracked(value as number | null);
+                            }
+                        "
+                    >
+                        <!-- 本行目的：按分组渲染追踪下拉选项组。 -->
+                        <a-optgroup v-for="group in trackedOptionsView" :key="group.label" :label="group.label">
+                            <!-- 本行目的：渲染分组内每个具体选项。 -->
+                            <a-option v-for="option in group.options" :key="option.value" :value="option.value">
+                                <!-- 本行目的：显示条目名称文本。 -->
+                                {{ option.label }}
+                            </a-option>
+                        </a-optgroup>
+                    </a-select>
+                    <!-- 本行目的：渲染自定义关键词输入框。 -->
+                    <!-- 本行目的：输入框属性包含样式类、双向值、占位、清空和回车提交。 -->
+                    <a-input
+                        class="search-input-flex"
+                        :model-value="props.search.customSearchInput.value"
+                        :placeholder="t('search.custom.placeholder', props.locale)"
+                        allow-clear
+                        @update:modelValue="(value: string) => (props.search.customSearchInput.value = value)"
+                        @press-enter="props.search.handleAddCustom"
+                    />
+                    <!-- 本行目的：点击提交当前输入关键词。 -->
+                    <a-button type="primary" @click="props.search.handleAddCustom">
+                        <!-- 本行目的：显示添加按钮文案。 -->
+                        {{ t("search.action.add", props.locale) }}
+                    </a-button>
+                </div>
+                <!-- 本行目的：仅在有关键词时显示已选关键词标签列表。 -->
+                <div v-if="props.search.searchTerms.value.length" class="search-row search-tags">
+                    <!-- 本行目的：显示已选关键词区域标签。 -->
+                    <span class="search-label">{{ t("search.selected.label", props.locale) }}</span>
+                    <!-- 本行目的：包裹关键词标签集合。 -->
+                    <div class="search-tag-list">
+                        <!-- 本行目的：遍历关键词并渲染可关闭标签（键/尺寸/关闭回调）。 -->
+                        <a-tag
+                            v-for="(term, idx) in props.search.searchTerms.value"
+                            :key="term.id ?? `term-${idx}`"
+                            size="small"
+                            closable
+                            @close="props.search.removeSearchTerm(term.id ?? idx, term.id == null)"
+                        >
+                            <!-- 本行目的：显示关键词逻辑前缀。 -->
+                            <span class="term-op">{{ opLabel(term.op) }}</span>
+                            <!-- 本行目的：显示关键词文本内容。 -->
+                            <span class="term-value">{{ term.value }}</span>
+                        </a-tag>
+                    </div>
+                </div>
+                <!-- 本行目的：查询预览与执行搜索按钮行。 -->
+                <div class="search-row">
+                    <!-- 本行目的：显示查询预览标签。 -->
+                    <span class="search-label">{{ t("search.query.label", props.locale) }}</span>
+                    <!-- 本行目的：包裹查询预览文本容器。 -->
+                    <div class="search-preview">
+                        <!-- 本行目的：显示当前拼接后的查询字符串。 -->
+                        <div class="search-query">
+                            <!-- 本行目的：无查询时显示空提示文案。 -->
+                            {{ props.search.searchQuery.value || t("search.query.empty", props.locale) }}
+                        </div>
+                    </div>
+                    <!-- 本行目的：查询非空时允许触发搜索请求。 -->
+                    <a-button type="primary" :disabled="!props.search.searchQuery.value" @click="props.search.openSearch">
+                        <!-- 本行目的：显示执行搜索按钮文案。 -->
+                        {{ t("search.action.open", props.locale) }}
+                    </a-button>
+                </div>
+                <!-- 本行目的：仅在存在加载/错误/结果/HTML时显示结果区域。 -->
+                <div v-if="hasInlineResults" class="search-inline-results">
+                    <!-- 本行目的：结果区头部，展示标题与折叠按钮。 -->
+                    <div class="search-result-header">
+                        <!-- 本行目的：显示结果区标题文案。 -->
+                        <span>{{ t("search.results.title", props.locale) }}</span>
+                        <!-- 本行目的：点击后清空结果并折叠结果区。 -->
+                        <a-button size="mini" @click="props.search.clearSearchResults">
+                            <!-- 本行目的：显示折叠按钮文案。 -->
+                            {{ t("search.results.collapse", props.locale) }}
+                        </a-button>
+                    </div>
+                    <!-- 本行目的：结果内容主体容器。 -->
+                    <div class="search-open-modal">
+                        <!-- 本行目的：展示当前搜索 URL，便于跳转外部查看。 -->
+                        <p class="search-modal-row">
+                            <!-- 本行目的：显示 URL 标签名称。 -->
+                            <span class="search-modal-label">{{ t("search.url.label", props.locale) }}：</span>
+                            <!-- 本行目的：渲染可点击的搜索 URL 链接。 -->
+                            <!-- 本行目的：链接属性包含 href、新窗口打开、安全 rel 与统一外链回调。 -->
+                            <a
+                                :href="props.search.searchUrl.value"
+                                target="_blank"
+                                rel="noreferrer"
+                                @click.prevent="props.openExternalLink(props.search.searchUrl.value)"
+                            >
+                                <!-- 本行目的：显示当前搜索 URL 文本。 -->
+                                {{ props.search.searchUrl.value }}
+                            </a>
+                        </p>
+                        <!-- 本行目的：有解析结果时优先显示结构化结果列表。 -->
+                        <div v-if="props.search.searchResults.value.length" class="search-result-list">
+                            <!-- 本行目的：遍历每条搜索结果并渲染行内容。 -->
+                            <div v-for="item in props.search.searchResults.value" :key="item.detailUrl || item.title" class="search-result-row">
+                                <!-- 本行目的：展示条目名称与元信息区域。 -->
+                                <div class="sr-name">
+                                    <!-- 本行目的：条目标题点击后打开详情或可用下载链接。 -->
+                                    <!-- 本行目的：标题链接属性包含目标地址、新窗口、安全 rel 与统一外链回调。 -->
+                                    <a
+                                        :href="item.detailUrl || item.magnet || item.download"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        @click.prevent="props.openExternalLink(item.detailUrl || item.magnet || item.download)"
+                                    >
+                                        <!-- 本行目的：显示结果标题。 -->
+                                        {{ item.title }}
+                                    </a>
+                                    <!-- 本行目的：存在大小或日期时显示元信息。 -->
+                                    <div v-if="item.size || item.date" class="sr-meta">
+                                        <!-- 本行目的：有大小时显示文件大小。 -->
+                                        <span v-if="item.size">{{ item.size }}</span>
+                                        <!-- 本行目的：有日期时显示发布时间。 -->
+                                        <span v-if="item.date">{{ item.date }}</span>
+                                    </div>
+                                </div>
+                                <!-- 本行目的：展示可执行下载动作按钮区域。 -->
+                                <div class="sr-links">
+                                    <!-- 本行目的：有磁力链接时显示磁力下载按钮。 -->
+                                    <!-- 本行目的：按钮属性包含显示条件、文本样式、尺寸与点击下载回调。 -->
+                                    <a-button
+                                        v-if="item.magnet"
+                                        type="text"
+                                        size="mini"
+                                        @click="props.handleDownloadClick(item, 'magnet', item.magnet)"
+                                    >
+                                        <!-- 本行目的：显示磁力按钮文案。 -->
+                                        {{ t("search.result.magnet", props.locale) }}
+                                    </a-button>
+                                    <!-- 本行目的：有 torrent 链接时显示 torrent 下载按钮。 -->
+                                    <!-- 本行目的：按钮属性包含显示条件、文本样式、尺寸与点击下载回调。 -->
+                                    <a-button
+                                        v-if="item.download"
+                                        type="text"
+                                        size="mini"
+                                        @click="props.handleDownloadClick(item, 'torrent', item.download)"
+                                    >
+                                        <!-- 本行目的：显示 torrent 按钮文案。 -->
+                                        {{ t("search.result.torrent", props.locale) }}
+                                    </a-button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 本行目的：无结构化结果且无加载/错误时，回退展示原始 HTML 预览。 -->
+                        <!-- 本行目的：iframe 属性包含显示条件、样式、srcdoc、sandbox 与可访问标题。 -->
+                        <iframe
+                            v-else-if="!props.search.searchLoading.value && !props.search.searchError.value"
+                            class="search-preview-frame"
+                            :srcdoc="props.search.searchHtml.value"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                            :title="t('search.title', props.locale)"
+                        />
+                        <!-- 本行目的：加载中时展示加载提示。 -->
+                        <div v-if="props.search.searchLoading.value" class="search-loading">
+                            <!-- 本行目的：显示加载状态文案。 -->
+                            {{ t("search.loading", props.locale) }}
+                        </div>
+                        <!-- 本行目的：加载失败时展示错误信息。 -->
+                        <div v-else-if="props.search.searchError.value" class="search-error">
+                            <!-- 本行目的：显示当前错误文本。 -->
+                            {{ props.search.searchError.value }}
+                        </div>
+                    </div>
+                </div>
             </div>
-            <!-- 没有解析结果时，用 iframe 展示原始搜索页面 -->
-            <iframe
-              v-else-if="!search.searchLoading.value && !search.searchError.value"
-              class="search-preview-frame"
-              :srcdoc="search.searchHtml.value"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title="搜索页面"
-            />
-            <!-- 加载/错误提示 -->
-            <div v-if="search.searchLoading.value" class="search-loading">正在加载...</div>
-            <div v-else-if="search.searchError.value" class="search-error">{{ search.searchError.value }}</div>
-          </div>
-        </div>
-      </div>
-    </NCard>
-  </div>
+        </a-card>
+        <!-- 本行目的：渲染别名选择弹窗，并与搜索状态双向联动。 -->
+        <!-- 本行目的：传入弹窗所需状态、确认/取消回调以及两个更新事件。 -->
+        <AliasModal
+            :locale="props.locale"
+            :show="props.search.aliasModalVisible.value"
+            :pending-tracked-name="props.search.pendingTrackedName.value"
+            :alias-loading="props.search.aliasLoading.value"
+            :alias-options="props.search.aliasOptions.value"
+            :alias-selected="props.search.aliasSelected.value"
+            :on-cancel="props.search.cancelAliasSelection"
+            :on-confirm="props.search.confirmAliasSelection"
+            @update:show="updateAliasModalVisible"
+            @update:aliasSelected="updateAliasSelected"
+        />
+    </div>
 </template>

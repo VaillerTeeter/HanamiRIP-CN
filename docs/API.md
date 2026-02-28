@@ -1,149 +1,119 @@
-
 # API 文档
 
-本项目包含前端调用的 Tauri 命令（Rust 后端），以及前端直接调用的 Tauri JS API 和外部 HTTP API。下面按类型列出，并给出简要说明与用法。
+本文档基于当前后端命令注册（`apps/desktop/backend/src/main.rs`）整理，覆盖前端可调用能力与主要参数。
 
-## Tauri 命令（Rust 后端）
+## 1. 调用约定
 
-说明：以下命令均通过 `@tauri-apps/api/core` 的 `invoke()` 调用。
+前端通过：
 
-### Bangumi 数据
+```ts
+import { invoke } from "@tauri-apps/api/core";
+```
 
-- `get_season_subjects(year: number, season: string)`
-	- 简介：按季度获取番剧列表。
-	- 用法：`invoke("get_season_subjects", { year, season })`
+统一调用：
 
-- `get_subject_origin(id: number)`
-	- 简介：获取番剧原作信息。
-	- 用法：`invoke("get_subject_origin", { id })`
+```ts
+await invoke("command_name", { /* payload */ });
+```
 
-- `get_subject_aired_count(id: number)`
-	- 简介：获取已播集数与总集数。
-	- 用法：`invoke("get_subject_aired_count", { id })`
+返回值由 Rust `Result<T, String>` 序列化后返回；失败时抛出错误字符串。
 
-- `get_subject_filters(id: number)`
-	- 简介：获取番剧筛选标签（类型/地区/受众）。
-	- 用法：`invoke("get_subject_filters", { id })`
+## 2. Tauri 命令总览
 
-- `get_subject_staff(id: number)`
-	- 简介：获取制作人员分组信息。
-	- 用法：`invoke("get_subject_staff", { id })`
+### 2.1 Bangumi 模块（10 个）
 
-- `get_subject_characters(id: number)`
-	- 简介：获取角色列表。
-	- 用法：`invoke("get_subject_characters", { id })`
+1. `get_season_subjects(year: u32, season: String)`
+2. `get_subject_origin(id: u32)`
+3. `get_subject_aired_count(id: u32)`
+4. `get_subject_filters(id: u32)`
+5. `get_subject_staff(id: u32)`
+6. `get_subject_characters(id: u32)`
+7. `get_subject_summary_cn(id: u32, summary: String)`
+8. `get_subject_brief(id: u32)`
+9. `fetch_search_html(url: String)`
+10. `get_subject_aliases(id: u32)`
 
-- `get_subject_summary_cn(id: number, summary: string)`
-	- 简介：获取/翻译番剧简介为中文。
-	- 用法：`invoke("get_subject_summary_cn", { id, summary })`
+说明：
+- 数据来源主要是 Bangumi API。
+- `get_subject_summary_cn` 会尝试翻译，失败时返回原文并带错误信息字段。
+- `fetch_search_html` 返回原始 HTML 字符串，解析逻辑在前端。
 
-- `get_subject_brief(id: number)`
-	- 简介：获取番剧简要信息（名称/图片/评分等）。
-	- 用法：`invoke("get_subject_brief", { id })`
+### 2.2 Torrent 模块（10 个）
 
-- `get_subject_aliases(id: number)`
-	- 简介：获取番剧别名列表。
-	- 用法：`invoke("get_subject_aliases", { id })`
+1. `start_torrent_download(app, url, output_dir, output_path, total_bytes?)`
+2. `get_torrent_metadata(app, url)`
+3. `list_pending_downloads(app)`
+4. `resume_torrent_download(app, task_id)`
+5. `discard_torrent_download(app, task_id)`
+6. `get_torrent_status(app, id)`
+7. `finalize_torrent_download(app, temp_folder, final_path, placeholder_path)`
+8. `pause_torrent(app, id)`
+9. `resume_torrent(app, id)`
+10. `delete_torrent(app, id)`
 
-- `fetch_search_html(url: string)`
-	- 简介：抓取搜索页面 HTML（用于站内解析）。
-	- 用法：`invoke("fetch_search_html", { url })`
+说明：
+- `start_torrent_download` 会创建临时目录与占位文件，并持久化任务记录。
+- `list_pending_downloads` 会清理已失效任务并返回仍可恢复的任务。
+- `finalize_torrent_download` 会移动产物并清理占位与临时目录。
 
-### 媒体轨道解析/混流
+### 2.3 Media 模块（3 个）
 
-- `parse_media_tracks(path: string, kind: "video" | "audio" | "subtitle")`
-	- 简介：解析媒体文件轨道信息。
-	- 用法：`invoke("parse_media_tracks", { path, kind })`
+1. `parse_media_tracks(app, path, kind)`
+2. `get_media_file_size(path)`
+3. `mix_media_tracks(app, inputs, output_path)`
 
-- `get_media_file_size(path: string)`
-	- 简介：获取媒体文件大小（可读格式）。
-	- 用法：`invoke("get_media_file_size", { path })`
+说明：
+- `parse_media_tracks`：MKV 容器优先走 `mkvmerge -J`；其他格式走 `ffprobe`。
+- `kind` 常用值：`video` / `audio` / `subtitle`。
+- `mix_media_tracks` 返回最终输出路径字符串。
 
-- `mix_media_tracks(inputs: MixTrackInput[], outputPath: string)`
-	- 简介：按指定轨道混流生成输出文件。
-	- 用法：`invoke("mix_media_tracks", { inputs, outputPath })`
+### 2.4 Storage 模块（3 个）
 
-### 下载（Torrent）
+1. `list_tracked_subjects(app)`
+2. `save_tracked_subject(app, subject)`
+3. `get_local_weekday()`
 
-- `start_torrent_download(url: string, outputDir: string)`
-	- 简介：启动下载任务。
-	- 用法：`invoke("start_torrent_download", { url, outputDir })`
+说明：
+- `save_tracked_subject` 在条目三个状态都为 false 时会删除该条目。
 
-- `get_torrent_status(id: number)`
-	- 简介：获取下载任务状态。
-	- 用法：`invoke("get_torrent_status", { id })`
+### 2.5 External 模块（1 个）
 
-- `pause_torrent(id: number)`
-	- 简介：暂停下载任务。
-	- 用法：`invoke("pause_torrent", { id })`
+1. `open_external_link(url)`
 
-- `resume_torrent(id: number)`
-	- 简介：恢复下载任务。
-	- 用法：`invoke("resume_torrent", { id })`
+说明：
+- 使用系统默认浏览器打开链接。
 
-- `delete_torrent(id: number)`
-	- 简介：删除下载任务。
-	- 用法：`invoke("delete_torrent", { id })`
+## 3. 前端常用 Tauri JS API
 
-- `finalize_torrent_download(tempFolder: string, finalFolder: string)`
-	- 简介：完成下载后移动文件并清理临时目录。
-	- 用法：`invoke("finalize_torrent_download", { tempFolder, finalFolder })`
-
-### 本地存储
-
-- `list_tracked_subjects()`
-	- 简介：读取本地追番列表。
-	- 用法：`invoke("list_tracked_subjects")`
-
-- `save_tracked_subject(subject: TrackedSubject)`
-	- 简介：保存/更新追番记录。
-	- 用法：`invoke("save_tracked_subject", { subject })`
-
-### 外部链接
-
-- `open_external_link(url: string)`
-	- 简介：使用系统默认浏览器打开链接。
-	- 用法：`invoke("open_external_link", { url })`
-
-## 前端 Tauri JS API
-
-- `@tauri-apps/api/core.invoke()`
-	- 简介：调用上面的后端命令。
-	- 用法：`invoke("command_name", payload)`
-
-- `@tauri-apps/api/window.getCurrentWindow()`
-	- 简介：获取当前窗口实例。
-	- 用法：`const appWindow = getCurrentWindow()`
-
+- `@tauri-apps/api/core.invoke`
+- `@tauri-apps/api/window.getCurrentWindow`
 - `Window.minimize()` / `Window.close()`
-	- 简介：窗口最小化与关闭。
-	- 用法：`await appWindow.minimize()` / `await appWindow.close()`
+- `@tauri-apps/plugin-dialog.open` / `save`
 
-- `@tauri-apps/plugin-dialog.open()` / `save()`
-	- 简介：打开文件/保存文件对话框。
-	- 用法：`open({ directory: false, multiple: false })` / `save({ filters: [...] })`
+## 4. 外部依赖接口
 
-## 外部 HTTP API
+- Bangumi API：`https://api.bgm.tv`
+- 搜索抓取来源（HTML）：`https://nyaa.vaciller.top/`
+- 百度翻译（可选）：`https://fanyi-api.baidu.com/ait/api/aiTextTranslate`
 
-- Bangumi API
-	- 基础地址：`https://api.bgm.tv`
-	- 用途：番剧信息、角色、人员、别名、集数等。
+## 5. 示例
 
-- 搜索抓取（Nyaa）
-	- 基础地址：`https://nyaa.vaciller.top/`
-	- 用途：下载搜索页 HTML 解析。
+### 5.1 启动下载
 
-- 百度翻译 AI
-	- 地址：`https://fanyi-api.baidu.com/ait/api/aiTextTranslate`
-	- 用途：番剧简介翻译。
-	- 需要环境变量：`BAIDU_TRANSLATE_APP_ID`、`BAIDU_TRANSLATE_API_KEY`
+```ts
+const task = await invoke("start_torrent_download", {
+  url: "magnet:?xt=...",
+  outputDir: "D:/Anime",
+  outputPath: "D:/Anime/MyShow.mkv",
+  totalBytes: 1_073_741_824,
+});
+```
 
-## 本地工具（随应用打包）
+### 5.2 查询轨道
 
-- `ffprobe` / `ffmpeg` / `mkvmerge` / `mkvinfo`
-	- 用途：媒体轨道解析、封装与混流。
-	- 位置：`apps/desktop/public/tools/`（打包后内置到资源目录）。
-
-## 更新记录
-- 2026-02-06：初始第一版。
-
+```ts
+const result = await invoke("parse_media_tracks", {
+  path: "D:/media/input.mkv",
+  kind: "audio",
+});
+```

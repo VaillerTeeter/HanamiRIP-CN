@@ -1,1993 +1,3246 @@
-/*
-  字体资源：全部使用本地字体文件，避免首次渲染时请求远程字体造成白屏或延迟。
-  这里分别声明简中/日文/韩文/繁中文的常用字重，以保证多语言文本不缺字。
-*/
-/* Local Noto Sans fonts to avoid remote fetch latency */
-/* 字体块（SC 常规）：声明简中字体 400 字重。 */
-@font-face {
-  font-family: "Noto Sans SC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/NotoSansSC-Regular.ttf") format("truetype");
+/* 文件：style.css | 用途：定义桌面前端全局布局、标题栏、各页面容器与模块样式 | 关键选择器：:root、body、#app、.app-titlebar、.app-body、.query-panel、.result-list、.detail-panel */
+/* 根作用域变量与浏览器能力声明区域。 */
+:root {
+    /* 告诉浏览器此页面同时支持亮色与暗色配色，便于系统主题联动。 */
+    color-scheme: light dark;
 }
 
-/* 字体块（SC 半粗）：声明简中字体 600 字重，用于标题/强调。 */
-@font-face {
-  font-family: "Noto Sans SC";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/NotoSansSC-SemiBold.ttf") format("truetype");
-}
-
-/* 字体块（JP 常规）：声明日文字体 400 字重。 */
-@font-face {
-  font-family: "Noto Sans JP";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/NotoSansJP-Regular.ttf") format("truetype");
-}
-
-/* 字体块（JP 半粗）：声明日文字体 600 字重。 */
-@font-face {
-  font-family: "Noto Sans JP";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/NotoSansJP-SemiBold.ttf") format("truetype");
-}
-
-/* 字体块（KR 常规）：声明韩文字体 400 字重。 */
-@font-face {
-  font-family: "Noto Sans KR";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/NotoSansKR-Regular.ttf") format("truetype");
-}
-
-/* 字体块（KR 半粗）：声明韩文字体 600 字重。 */
-@font-face {
-  font-family: "Noto Sans KR";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/NotoSansKR-SemiBold.ttf") format("truetype");
-}
-
-/* 字体块（TC 常规）：声明繁中文字 400 字重。 */
-@font-face {
-  font-family: "Noto Sans TC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/NotoSansTC-Regular.ttf") format("truetype");
-}
-
-/* 字体块（TC 半粗）：声明繁中文字 600 字重。 */
-@font-face {
-  font-family: "Noto Sans TC";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/NotoSansTC-SemiBold.ttf") format("truetype");
-}
-
-/*
-  盒模型统一：所有元素都用 border-box，宽高计算包含内边距/边框，
-  这样布局时更“所见即所得”，不容易出现尺寸超出。
-*/
+/* 全局选择器：统一所有元素的盒模型为 border-box，避免尺寸计算偏差。 */
 * {
-  box-sizing: border-box;
+    /* 让宽高计算包含内边距与边框，布局更可控。 */
+    box-sizing: border-box;
 }
 
-/*
-  根容器高度拉满：让应用在桌面窗口中占满可视区域。
-  font-family 先用 Inter，再回退到 Noto 系列，最后回退系统字体。
-*/
-html,
-body,
-#app {
-  height: 100%;
-  margin: 0;
-  font-family: "Inter", "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", "Noto Sans TC", system-ui,
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-/* 页面基础背景与滚动策略：隐藏系统滚动条，避免内部面板出现双滚动。 */
+/* body 作为页面总容器，负责基础字体、背景与窗口高度约束。 */
 body {
-  background: #f5f6f8;
-  overflow: hidden;
+    /* 去除浏览器默认外边距，避免四周留白。 */
+    margin: 0;
+    /* 指定多语言字体回退链，优先覆盖中日文字形。 */
+    font-family: "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+    /* 使用主题背景色变量，确保亮暗主题都能正确适配。 */
+    background: var(--color-bg-2);
+    /* 禁止 body 自身滚动，把滚动控制权交给各局部容器。 */
+    overflow: hidden;
+    /* 锁定为视口高度，避免桌面窗口中出现额外高度塌陷。 */
+    height: 100vh;
 }
 
-/* 应用壳层：纵向排版，顶栏固定，主体区域占满剩余空间。 */
+/* Vue 应用根挂载容器，约束最小可用尺寸与最大边界。 */
+#app {
+    /* 设置最小宽度，防止窗口过窄导致复杂布局拥挤。 */
+    min-width: 960px;
+    /* 设置最小高度，保证多模块页面在桌面端可操作。 */
+    min-height: 640px;
+    /* 最大宽度限制为视口宽，避免超出窗口边界。 */
+    max-width: 100vw;
+    /* 最大高度限制为视口高，避免纵向溢出到窗口外。 */
+    max-height: 100vh;
+    /* 主体高度占满视口，便于子容器用百分比计算。 */
+    height: 100vh;
+}
+
+/* 应用外壳：采用纵向 Flex，把标题栏与内容区上下分布。 */
 .app-shell {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 100vh;
+    /* 高度继承父容器，保持满屏。 */
+    height: 100%;
+    /* 启用 Flex 布局。 */
+    display: flex;
+    /* 主轴改为纵向，形成“标题栏在上、内容区在下”的结构。 */
+    flex-direction: column;
+    /* 禁止外壳滚动，避免出现双滚动条。 */
+    overflow: hidden;
+    /* 兜底最小高度为视口高。 */
+    min-height: 100vh;
 }
 
-/*
-  标题栏：使用 grid 让左侧信息与右侧按钮分栏对齐。
-  -webkit-app-region: drag 让空白区域可拖拽窗口（Tauri/桌面特性）。
-*/
+/* 顶部标题栏：左侧导航 + 右侧窗口按钮的网格布局。 */
 .app-titlebar {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  padding: 4px 8px;
-  background: #e6e6e6;
-  box-shadow: 0 1px 4px rgba(31, 41, 55, 0.12);
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  -webkit-app-region: drag;
-  user-select: none;
-  min-height: 32px;
+    /* 使用 Grid 让左右区域稳定分列。 */
+    display: grid;
+    /* 左列自适应填充，右列按内容宽度。 */
+    grid-template-columns: 1fr auto;
+    /* 垂直居中对齐内容。 */
+    align-items: center;
+    /* 设置紧凑内边距，符合桌面标题栏密度。 */
+    padding: 4px 8px;
+    /* 标题栏背景使用主题一级背景色。 */
+    background: var(--color-bg-1);
+    /* 轻阴影用于与内容区分层。 */
+    box-shadow: 0 1px 4px var(--color-fill-2);
+    /* 禁止收缩，保证标题栏高度稳定。 */
+    flex-shrink: 0;
+    /* 粘性定位，让标题栏在内部滚动容器中保持顶部可见。 */
+    position: sticky;
+    /* 粘附在顶部。 */
+    top: 0;
+    /* 分层层级高于普通内容，防止被卡片覆盖。 */
+    z-index: 10;
+    /* Tauri 桌面窗口拖拽区域声明。 */
+    -webkit-app-region: drag;
+    /* 禁止选中文本，提升标题栏交互体验。 */
+    user-select: none;
+    /* 设置最小高度，保证按钮触控面积。 */
+    min-height: 32px;
 }
 
-/* 可拖拽区域：放置标题与导航，避免按钮区误触拖拽。 */
+/* 标题栏拖拽主区域：承载标题与导航。 */
 .titlebar-drag-region {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
+    /* 使用 Flex 横向排布内部元素。 */
+    display: flex;
+    /* 垂直方向居中。 */
+    align-items: center;
+    /* 标题和导航之间留间距。 */
+    gap: 12px;
+    /* 允许在窄窗口时内容压缩。 */
+    min-width: 0;
+    /* 占满剩余空间，把操作按钮推向右侧。 */
+    flex: 1;
 }
 
-/* 标题左侧信息：标题 + 副标题，基线对齐看起来更“整齐”。 */
+/* 标题左侧文案区：应用名与副标题。 */
 .titlebar-left {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  color: #1f2937;
-  min-width: 0;
+    /* 横向排列标题文本。 */
+    display: flex;
+    /* 副标题基线对齐，视觉更整齐。 */
+    align-items: baseline;
+    /* 主副标题留出小间距。 */
+    gap: 8px;
+    /* 使用主文字颜色。 */
+    color: var(--color-text-1);
+    /* 允许缩小时省略，防止挤爆布局。 */
+    min-width: 0;
 }
 
-/* 应用标题文字：更粗更大，突出主标题。 */
+/* 应用主标题：提升品牌辨识度。 */
 .app-title {
-  font-weight: 700;
-  font-size: 16px;
+    /* 使用较高字重突出主标题。 */
+    font-weight: 700;
+    /* 主标题字号。 */
+    font-size: 16px;
 }
 
-/* 应用副标题：字号略小、颜色更浅。 */
+/* 应用副标题：提供补充说明信息。 */
 .app-subtitle {
-  font-weight: 500;
-  font-size: 13px;
-  color: #6b7280;
+    /* 中等字重，弱于主标题。 */
+    font-weight: 500;
+    /* 副标题字号略小。 */
+    font-size: 13px;
 }
 
-/* 导航按钮区：显式禁止拖拽，保证按钮可点击。 */
 .titlebar-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  -webkit-app-region: no-drag;
+    /* 导航项使用内联 Flex，避免换行为块级元素。 */
+    display: inline-flex;
+    /* 导航按钮垂直居中。 */
+    align-items: center;
+    /* 导航按钮间距。 */
+    gap: 8px;
+    /* 声明为不可拖拽区，确保按钮可点击。 */
+    -webkit-app-region: no-drag;
 }
 
-/* 导航内部元素：确保子元素同样不可拖拽。 */
-.titlebar-nav * {
-  -webkit-app-region: no-drag;
-}
-
-/* 标题栏按钮：允许点击并禁止拖拽。 */
-.titlebar-actions button,
-.titlebar-actions .titlebar-control {
-  -webkit-app-region: no-drag;
-  pointer-events: auto;
-}
-
-/* 右侧窗口控制按钮区（最小化/关闭等）。 */
 .titlebar-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  -webkit-app-region: no-drag;
+    /* 操作区使用内联 Flex，便于与导航同行展示。 */
+    display: inline-flex;
+    /* 按钮垂直居中。 */
+    align-items: center;
+    /* 窗口控制按钮间距。 */
+    gap: 6px;
+    /* 声明为不可拖拽区，确保最小化/关闭可触发。 */
+    -webkit-app-region: no-drag;
 }
 
-/* 标题栏内部元素：统一禁止拖拽，避免误操作。 */
-.titlebar-actions * {
-  -webkit-app-region: no-drag;
-}
-
-/*
-  窗口控制按钮：宽高固定，易点按；hover 轻微高亮。
-  关闭按钮用红色突出“危险操作”。
-*/
 .titlebar-control {
-  width: 44px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: #111827;
-  font-size: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+    /* 固定按钮宽度，保证窗口控制区节奏统一。 */
+    width: 44px;
+    /* 固定按钮高度，控制点击区域。 */
+    height: 28px;
+    /* 内联 Flex 方便图标居中。 */
+    display: inline-flex;
+    /* 图标垂直居中。 */
+    align-items: center;
+    /* 图标水平居中。 */
+    justify-content: center;
+    /* 小圆角与系统风格保持一致。 */
+    border-radius: 4px;
+    /* 仅过渡背景与文字色，减少不必要重排。 */
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
 }
 
-/* 控制按钮 hover：轻微底色提示可交互。 */
+/* 标题栏按钮悬停态：轻背景高亮。 */
 .titlebar-control:hover {
-  background: rgba(0, 0, 0, 0.06);
+    /* 悬停时改为次级填充色。 */
+    background: var(--color-fill-2);
 }
 
-/* 关闭按钮 hover：红色警示，避免误点。 */
+/* 关闭按钮悬停态：危险色强调误触风险。 */
 .titlebar-close:hover {
-  background: #e81123;
-  color: #ffffff;
+    /* 危险背景。 */
+    background: var(--color-danger-6);
+    /* 白色文字提升对比度。 */
+    color: var(--color-white);
 }
 
-/* 控制按钮内图标：统一字体与对齐。 */
+/* 标题栏图标尺寸控制。 */
 .titlebar-icon {
-  line-height: 1;
-  font-weight: 600;
-  font-family: "Segoe UI", "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* 图标字号。 */
+    font-size: 16px;
+    /* 紧凑行高避免垂直偏移。 */
+    line-height: 1;
 }
 
-
-/*
-  主体区域：居中容器，允许内部视图自己决定布局。
-  通过 min-height: 0 解决 flex 子元素溢出时无法滚动的问题。
-*/
 .app-body {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 12px 16px;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+    /* 内容区填满标题栏以下剩余空间。 */
+    flex: 1;
+    /* 使用 Flex 布局承载各页面容器。 */
+    display: flex;
+    /* 默认垂直居中（部分页面会覆盖）。 */
+    align-items: center;
+    /* 默认水平居中（部分页面会覆盖）。 */
+    justify-content: center;
+    /* 统一内容区边距。 */
+    padding: 12px 12px 16px;
+    /* 高度继承外壳，保证内部百分比布局有效。 */
+    height: 100%;
+    /* 允许子元素正确收缩，避免溢出。 */
+    min-height: 0;
+    /* 默认不让根内容区滚动，交给局部滚动容器。 */
+    overflow: hidden;
 }
 
-/* 搜索页：顶部对齐，留出统一内边距。 */
+/* 追番页面容器：主要用于可滚动的纵向内容。 */
+.tracking-body {
+    /* 子项沿交叉轴拉伸到同高。 */
+    align-items: stretch;
+    /* 内容从顶部开始排布。 */
+    justify-content: flex-start;
+    /* 允许容器纵向滚动。 */
+    overflow: auto;
+    /* 保持可收缩能力。 */
+    min-height: 0;
+}
+
+/* 搜索视图容器：从左上角开始布局，支持滚动。 */
 .search-view {
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 16px;
+    /* 交叉轴顶部对齐。 */
+    align-items: flex-start;
+    /* 主轴从起点开始。 */
+    justify-content: flex-start;
+    /* 统一内边距。 */
+    padding: 16px;
+    /* 允许内容溢出滚动。 */
+    overflow: auto;
 }
 
-/* 下载页：同搜索页一致的对齐与内边距。 */
+/* 下载视图容器：布局策略与搜索页保持一致。 */
 .download-view {
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 16px;
-}
-
-/* 下载卡片容器：限制最大高度，内部滚动避免整页滚动。 */
-.download-card {
-  width: 100%;
-  max-width: 1400px;
-  min-height: 0;
-  max-height: 92vh;
-  overflow: auto;
-}
-
-/* 下载为空提示：使用浅色文字避免喧宾夺主。 */
-.download-empty {
-  margin: 0;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-/* 下载列表：纵向堆叠，每条间距统一。 */
-.download-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 下载工具栏：横向排列操作与信息。 */
-.download-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  align-items: center;
-}
-
-/* 总速度展示：小字号弱提示。 */
-.download-total-speed {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* 总速度标签：略加粗强调字段名。 */
-.download-total-label {
-  font-weight: 600;
-  color: #374151;
-}
-
-/* 工具栏右侧操作区：靠右对齐按钮。 */
-.download-toolbar-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-/*
-  单条下载：grid 让信息区与按钮区左右分开，
-  背景/边框用于区分条目。
-*/
-.download-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-}
-
-/* 下载标题：加粗并允许断词。 */
-.download-title {
-  font-weight: 600;
-  color: #111827;
-  word-break: break-all;
-}
-
-/* 下载元信息：用小字号与浅色展示。 */
-.download-meta {
-  margin-top: 6px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* 进度区：纵向堆叠进度条与文本。 */
-.download-progress {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* 进度文本：轻量提示当前百分比/速度。 */
-.progress-text {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* 下载错误提示：用红色突出问题。 */
-.download-error {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #b91c1c;
-}
-
-/* 小标签通用样式：圆角胶囊用于元信息/状态提示。 */
-.pill {
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: #e5e7eb;
-}
-
-/* 路径标签：超长路径省略显示。 */
-.path-pill {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 下载操作按钮区：保证在右侧不被覆盖。 */
-.download-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-  z-index: 1;
-}
-
-/* 音轨列表：纵向排列，便于逐项查看。 */
-.tracks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 混流顶部栏：语言选择与操作按钮水平排列。 */
-.tracks-mix-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 4px;
-}
-
-/* 混流语言选择区：可换行，避免小屏挤压。 */
-.tracks-mix-lang {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 6px 0 4px;
-  font-size: 12px;
-  color: #4b5563;
-}
-
-/* 混流语言标签标题：加粗增强识别。 */
-.tracks-mix-lang-label {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 混流语言单项：胶囊容器承载下拉选择。 */
-.tracks-mix-lang-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
-  background: #eef2ff;
-  border-radius: 999px;
-  writing-mode: horizontal-tb;
-  white-space: nowrap;
-}
-
-/* 混流语言下拉：保证最小宽度，防止挤压。 */
-.tracks-mix-lang-item .n-select {
-  min-width: 120px;
-}
-
-/* 混流错误提示：红色警示。 */
-.tracks-mix-error {
-  font-size: 12px;
-  color: #b91c1c;
-}
-
-/* 混流成功提示：绿色表示完成。 */
-.tracks-mix-success {
-  font-size: 12px;
-  color: #15803d;
-}
-
-/*
-  音轨分区卡片：用于分隔多个音轨/文件组，背景更浅。
-  内部使用纵向布局，信息块间距统一。
-*/
-.tracks-section {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  background: #f9fafb;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 音轨卡片头部：标题与按钮左右分布。 */
-.tracks-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* 音轨卡片标题：加粗突出分区名。 */
-.tracks-title {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 音轨卡片操作区：按钮并排。 */
-.tracks-actions {
-  display: inline-flex;
-  gap: 8px;
-}
-
-/* 音轨卡片主体：纵向堆叠内容。 */
-.tracks-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 音轨文件列表：纵向排列文件行。 */
-.tracks-files {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* 单个文件行：三列布局（名称/大小/路径等）。 */
-.tracks-file {
-  display: grid;
-  grid-template-columns: 140px 90px 1fr;
-  gap: 8px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* 文件名列：加粗提高可读性。 */
-.tracks-file-name {
-  font-weight: 600;
-  color: #374151;
-}
-
-/* 文件路径列：过长时省略。 */
-.tracks-file-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  white-space: nowrap;
-}
-
-/* 文件大小列：右对齐便于比较。 */
-.tracks-file-size {
-  text-align: right;
-  color: #6b7280;
-}
-
-/* 音轨进度条区域：上下留白。 */
-.tracks-progress {
-  padding: 4px 0;
-}
-
-/* 音轨信息区：多个信息块纵向排列。 */
-.tracks-info {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* 音轨信息组：卡片化展示单个文件信息。 */
-.tracks-info-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-/* 信息组文件名：小字号加粗。 */
-.tracks-info-file {
-  font-weight: 600;
-  color: #374151;
-  font-size: 12px;
-}
-
-/* 信息组行：允许换行的元信息列表。 */
-.tracks-info-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* 元信息名称：加粗突出字段名。 */
-.tracks-info-name {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 元信息标签：圆角胶囊，弱强调。 */
-.tracks-info-meta {
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: #e5e7eb;
-}
-
-/* 音轨错误提示：红色提醒问题。 */
-.tracks-error {
-  font-size: 12px;
-  color: #b91c1c;
-}
-
-/* 混流队列列表：纵向排列条目。 */
-.mix-queue-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/*
-  混流队列条目：grid 固定列宽显示 ID/时间/输出/状态。
-  hover 时增加阴影与边框，提示可点击。
-*/
-.mix-queue-row {
-  display: grid;
-  grid-template-columns: 52px 140px 1fr 70px;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 12px;
-  color: #6b7280;
-  cursor: pointer;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
-}
-
-/* 混流条目 hover：边框与阴影增强反馈。 */
-.mix-queue-row:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
-}
-
-/* 混流任务 ID：加粗突出编号。 */
-.mix-queue-id {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 混流时间：浅色提示时间信息。 */
-.mix-queue-time {
-  color: #6b7280;
-}
-
-/* 混流输出路径：过长时省略。 */
-.mix-queue-output {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 混流日志行：占满整行，便于展示消息。 */
-.mix-queue-message-row {
-  grid-column: 1 / -1;
-  color: #374151;
-  background: #f9fafb;
-  border-radius: 6px;
-  padding: 4px 6px;
-  line-height: 1.4;
-  word-break: break-all;
-}
-
-/* 混流状态：右对齐，方便快速扫读。 */
-.mix-queue-status {
-  font-weight: 600;
-  justify-self: end;
-}
-
-/* 状态=排队：灰色中立。 */
-.mix-queue-status[data-status="queued"] {
-  color: #6b7280;
-}
-
-/* 状态=运行中：蓝色表示进行中。 */
-.mix-queue-status[data-status="running"] {
-  color: #2563eb;
-}
-
-/* 状态=成功：绿色表示完成。 */
-.mix-queue-status[data-status="success"] {
-  color: #15803d;
-}
-
-/* 状态=失败：红色表示错误。 */
-.mix-queue-status[data-status="failed"] {
-  color: #b91c1c;
-}
-
-/* 混流详情区域：纵向排列细节信息。 */
-.mix-queue-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 12px;
-  color: #374151;
-}
-
-/* 混流详情行：左右两列的标签-值布局。 */
-.mix-queue-detail-row {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 12px;
-  align-items: center;
-}
-
-/* 详情标签：浅色加粗。 */
-.mix-queue-detail-label {
-  color: #6b7280;
-  font-weight: 600;
-}
-
-/* 详情值：过长时省略。 */
-.mix-queue-detail-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 详情小标题：区分不同信息块。 */
-.mix-queue-detail-section {
-  margin-top: 6px;
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 详情块：浅背景卡片化展示。 */
-.mix-queue-detail-block {
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/*
-  图标按钮：尺寸小、仅显示图标。
-  disabled 时降低对比度，提示不可用。
-*/
-.icon-button {
-  min-width: 24px;
-  padding: 0 6px;
-  font-size: 14px;
-  line-height: 1;
-  color: #374151;
-}
-
-/* 图标按钮禁用态：降低对比度。 */
-.icon-button:disabled {
-  color: #9ca3af;
-}
-
-/* 图标 SVG：统一尺寸与描边风格。 */
-.icon-button .icon {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* 图标多边形填充：使用当前文字色。 */
-.icon-button .icon polygon {
-  fill: currentColor;
-  stroke: none;
-}
-
-/* 搜索页主容器：宽度自适应，内部滚动。 */
-.search-panel {
-  width: 100%;
-  max-width: 1400px;
-  min-height: 0;
-  max-height: 92vh;
-  overflow: auto;
-}
-
-/* 搜索结果头部：标题与操作左右分布。 */
-.search-result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* 搜索内联结果区：浅背景卡片。 */
-.search-inline-results {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: #f9fafb;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 搜索卡片头：多行时允许换行。 */
-.search-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* 搜索控件区：纵向堆叠，便于逐项输入。 */
-.search-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* 搜索行：标签与控件并排。 */
-.search-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* 紧凑行：在同一行放置选择框/按钮，固定宽度避免错位。 */
-.search-row.compact {
-  flex-wrap: nowrap;
-  gap: 8px;
-}
-
-/* 紧凑行选择框：固定宽度防止抖动。 */
-.search-row.compact .n-select {
-  min-width: 240px;
-  max-width: 240px;
-  flex-shrink: 0;
-}
-
-/* 搜索输入框容器：可伸缩占满空位。 */
-.search-input-flex {
-  flex: 1;
-  min-width: 240px;
-  max-width: 240px;
-}
-
-/* 紧凑行按钮：禁止被挤压。 */
-.search-row.compact .n-button {
-  flex-shrink: 0;
-}
-
-/* 搜索标签列：固定宽度，文本加粗。 */
-.search-label {
-  width: 72px;
-  color: #4b5563;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-/* 搜索按钮组：按钮横向排列。 */
-.search-button-group {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* 逻辑分组容器：保持默认左对齐。 */
-.logic-group {
-  margin-left: 0;
-}
-
-/* 搜索提示文字：小字号浅色。 */
-.search-hint {
-  color: #6b7280;
-  font-size: 13px;
-}
-
-/* 标题旁提示：更小字号弱提示。 */
-.header-hint {
-  font-size: 12px;
-  color: #4b5563;
-}
-
-/* 搜索标签列表：可换行布局。 */
-.search-tag-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-/* 标签行：不换行，保证标签区与输入区对齐。 */
-.search-row.search-tags {
-  flex-wrap: nowrap;
-  align-items: flex-start;
-}
-
-/* 标签列表在标签行内自适应宽度。 */
-.search-row.search-tags .search-tag-list {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 查询条件操作符：浅色前缀提示。 */
-.term-op {
-  margin-right: 4px;
-  color: #6b7280;
-}
-
-/* 查询条件值：加粗强调。 */
-.term-value {
-  font-weight: 600;
-}
-
-/* 预览区：纵向堆叠文本/链接。 */
-.search-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 720px;
-}
-
-/* 打开弹窗内容：纵向排列项。 */
-.search-open-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-}
-
-/* 弹窗行：两列信息并排。 */
-.search-modal-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  word-break: break-all;
-}
-
-/* 弹窗字段名：固定最小宽度。 */
-.search-modal-label {
-  min-width: 56px;
-  color: #666;
-}
-
-/* 弹窗按钮区：右对齐操作。 */
-.search-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-/* 搜索状态提示：加载/错误用不同背景色提示当前状态。 */
-.search-loading,
-.search-error {
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-/* 搜索加载态：浅灰背景。 */
-.search-loading {
-  background: #f9fafb;
-  color: #374151;
-}
-
-/* 搜索错误态：红色背景提示问题。 */
-.search-error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecdd3;
-}
-
-/* 预览 iframe：给出固定最小高度，避免内容塌陷。 */
-.search-preview-frame {
-  width: 100%;
-  min-height: 520px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
-/* 搜索结果列表：纵向排列条目。 */
-.search-result-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px 0;
-}
-
-/* 搜索结果行：左右分列信息。 */
-.search-result-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-}
-
-/* 结果名称链接：加粗并保持深色。 */
-.sr-name a {
-  color: #1f2937;
-  font-weight: 600;
-}
-
-/* 结果名称 hover：下划线提示可点击。 */
-.sr-name a:hover {
-  text-decoration: underline;
-}
-
-/* 结果元信息：浅色小字展示年份/类型等。 */
-.sr-meta {
-  margin-top: 4px;
-  color: #6b7280;
-  font-size: 12px;
-  display: flex;
-  gap: 8px;
-}
-
-/* 结果链接组：横向排列外部链接。 */
-.sr-links {
-  display: inline-flex;
-  gap: 10px;
-}
-
-/* 结果链接样式：蓝色强调。 */
-.sr-links a {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-/* 结果链接 hover：下划线强调。 */
-.sr-links a:hover {
-  text-decoration: underline;
-}
-
-/* 搜索为空提示：浅色文案。 */
-.search-empty {
-  padding: 8px 0;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-/* 搜索查询展示：等宽字体显示 DSL/查询串。 */
-.search-query {
-  padding: 8px 10px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 13px;
-  color: #111827;
-  min-height: 32px;
-}
-
-/* 搜索链接行：标签与链接并排。 */
-.search-url {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-/* URL 标签：浅色说明字段名。 */
-.search-url .url-label {
-  color: #6b7280;
-}
-
-/* 别名弹窗主体：纵向堆叠内容块。 */
-.alias-modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 别名弹窗标题：正文段落样式。 */
-.alias-title {
-  margin: 0;
-  color: #374151;
-}
-
-/* 别名提示：小号浅色。 */
-.alias-hint {
-  margin: 0;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-/* 别名列表：可换行展示标签。 */
-.alias-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-
-/* 别名工具栏：左右两列布局。 */
-.alias-toolbar {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-}
-
-/* 别名操作按钮区：横向排列。 */
-.alias-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 别名计数：小号浅色统计。 */
-.alias-counter {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-/* 别名标签：胶囊样式。 */
-.alias-item {
-  padding: 6px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  background: #f9fafb;
-}
-
-/* 别名标签 hover：轻微底色变化。 */
-.alias-item:hover {
-  background: #f3f4f6;
-}
-
-/* 别名弹窗底部操作区：右对齐按钮。 */
-.alias-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* 搜索帮助区：上方留白分隔内容。 */
-.search-help {
-  margin-top: 4px;
-}
-
-/* 搜索帮助链接列表：可换行。 */
-.search-help-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-/* 标题栏按钮统一最小宽度，避免跳动。 */
-.titlebar-nav .n-button,
-.titlebar-actions .n-button {
-  min-width: 96px;
-}
-
-/* 结果页视图：纵向排列并顶部对齐。 */
+    /* 交叉轴顶部对齐。 */
+    align-items: flex-start;
+    /* 主轴从起点开始。 */
+    justify-content: flex-start;
+    /* 统一内边距。 */
+    padding: 16px;
+    /* 允许内容溢出滚动。 */
+    overflow: auto;
+}
+
+/* 下载恢复信息行：左信息右操作。 */
+.download-resume-row {
+    /* 使用 Flex 横向布局。 */
+    display: flex;
+    /* 交叉轴顶部对齐，适配多行文本。 */
+    align-items: flex-start;
+    /* 两端对齐形成左右分区。 */
+    justify-content: space-between;
+    /* 区块间距。 */
+    gap: 12px;
+    /* 占满父容器宽度。 */
+    width: 100%;
+}
+
+/* 下载恢复左侧信息区。 */
+.download-resume-info {
+    /* 使用纵向布局。 */
+    display: flex;
+    /* 子项纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 4px;
+    /* 允许缩小。 */
+    min-width: 0;
+}
+
+/* 下载恢复标题文本。 */
+.download-resume-title {
+    /* 半粗体强调标题。 */
+    font-weight: 600;
+    /* 主文字颜色。 */
+    color: var(--color-text-1);
+    /* 长路径允许任意位置换行。 */
+    word-break: break-all;
+}
+
+/* 下载恢复元信息标签区。 */
+.download-resume-meta {
+    /* 横向排列标签。 */
+    display: flex;
+    /* 多标签自动换行。 */
+    flex-wrap: wrap;
+    /* 标签间距。 */
+    gap: 6px;
+}
+
+/* 下载恢复操作按钮区。 */
+.download-resume-actions {
+    /* 内联 Flex 保持按钮并排。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 按钮间距。 */
+    gap: 8px;
+    /* 禁止压缩，保证按钮可见。 */
+    flex-shrink: 0;
+}
+
+/* 未知页面占位卡片宽度限制。 */
+.app-placeholder {
+    /* 在大屏时最大 720px，小屏时不超过父宽度。 */
+    width: min(720px, 100%);
+}
+
+/* 结果页总容器。 */
 .results-view {
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: 12px;
-  padding-bottom: 16px;
-  height: 100%;
-  min-height: 0;
+    /* 改为纵向布局。 */
+    flex-direction: column;
+    /* 交叉轴居中。 */
+    align-items: center;
+    /* 主轴从顶部开始。 */
+    justify-content: flex-start;
+    /* 顶部内边距。 */
+    padding-top: 12px;
+    /* 底部内边距。 */
+    padding-bottom: 16px;
+    /* 占满可用高度。 */
+    height: 100%;
+    /* 允许内部收缩。 */
+    min-height: 0;
 }
 
-/* 查询面板：宽度自适应内容。 */
+/* 查询页居中模式。 */
+.query-centered {
+    /* 交叉轴居中。 */
+    align-items: center;
+    /* 主轴居中。 */
+    justify-content: center;
+    /* 子项纵向排列。 */
+    flex-direction: column;
+}
+
+/* 居中模式下的摘要行修正。 */
+.query-centered .query-summary-row {
+    /* 主轴居中。 */
+    justify-content: center;
+    /* 交叉轴居中。 */
+    align-items: center;
+    /* 宽度由内容决定。 */
+    width: auto;
+}
+
+/* 查询主面板容器。 */
 .query-panel {
-  width: fit-content;
-  max-width: 100%;
+    /* 宽度贴合内容。 */
+    width: fit-content;
+    /* 最大不超过父容器。 */
+    max-width: 100%;
 }
 
-/* 查询顶部三栏：横向不换行，避免上下跳动。 */
+/* 统一查询三块卡片（查询/摘要/筛选）的背景与边框。 */
+.query-panel .arco-card,
+.summary-panel .arco-card,
+.filter-panel .arco-card {
+    /* 使用三级背景提升层次感。 */
+    background: var(--color-bg-3);
+    /* 统一边框色。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 统一结果列表、详情与汇总卡片样式。 */
+.result-list.arco-card,
+.detail-panel.arco-card,
+.result-summary.arco-card {
+    /* 使用三级背景色。 */
+    background: var(--color-bg-3);
+    /* 统一边框色。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 查询页上方摘要行布局。 */
 .query-summary-row {
-  width: 100%;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: nowrap;
+    /* 占满父容器宽度。 */
+    width: 100%;
+    /* 使用 Flex 横向布局。 */
+    display: flex;
+    /* 子项纵向拉伸同高。 */
+    align-items: stretch;
+    /* 整体居中显示。 */
+    justify-content: center;
+    /* 面板间距由各面板 margin 控制，这里设为 0。 */
+    gap: 0;
+    /* 禁止换行，保持一行展示。 */
+    flex-wrap: nowrap;
 }
 
-/* 三栏面板统一高度变量，便于联动。 */
+/* 查询区三面板的公共高度行为。 */
 .query-panel,
 .summary-panel,
 .filter-panel {
-  height: var(--query-panel-height, auto);
+    /* 允许外部通过 CSS 变量统一高度。 */
+    height: var(--query-panel-height, auto);
+    /* 在父容器中拉伸。 */
+    align-self: stretch;
+    /* 作为 Flex 容器承载内部卡片。 */
+    display: flex;
 }
 
-/* 摘要面板：固定宽度侧栏。 */
+/* 保证三类 Arco 卡片高度填满其父面板。 */
+.query-panel .arco-card,
+.summary-panel .arco-card,
+.filter-panel .arco-card {
+    /* 填满父级高度。 */
+    height: 100%;
+}
+
+/* 摘要面板：固定宽度，保证统计区稳定。 */
 .summary-panel {
-  flex: 0 0 320px;
-  min-width: 280px;
+    /* 不伸缩，基准宽 280px。 */
+    flex: 0 0 280px;
+    /* 最小宽度留给内容换行空间。 */
+    min-width: 260px;
+    /* 最大宽度锁定，避免挤压主查询区。 */
+    max-width: 280px;
+    /* 与查询主面板留出间隔。 */
+    margin-left: 8px;
 }
 
-/* 过滤面板：固定宽度侧栏。 */
+/* 筛选面板：比摘要面板更宽，用于承载两列筛选项。 */
 .filter-panel {
-  flex: 0 0 320px;
-  min-width: 280px;
+    /* 不伸缩，基准宽 360px。 */
+    flex: 0 0 360px;
+    /* 最小宽度防止控件溢出。 */
+    min-width: 340px;
+    /* 最大宽度锁定，保持视觉稳定。 */
+    max-width: 360px;
+    /* 与左侧面板微小间距。 */
+    margin-left: 1px;
 }
 
-/* 过滤器网格：两列布局，节省纵向空间。 */
+/* 筛选网格：两列固定宽度布局。 */
 .filter-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 12px;
+    /* 使用 Grid 管理筛选项。 */
+    display: grid;
+    /* 两列，每列 160px。 */
+    grid-template-columns: repeat(2, 160px);
+    /* 行间距 4px，列间距 12px。 */
+    gap: 4px 12px;
 }
 
-/* 过滤字段：左侧图标 + 右侧控件。 */
+/* 单个筛选字段：左标签右选择框。 */
 .filter-field {
-  display: grid;
-  grid-template-columns: 20px 1fr;
-  align-items: center;
-  gap: 8px;
+    /* 小型 Grid 保证标签和控件对齐。 */
+    display: grid;
+    /* 标签 40px，控件 120px。 */
+    grid-template-columns: 40px 120px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 标签与控件间距。 */
+    gap: 8px;
+    /* 最小宽度与列宽一致。 */
+    min-width: 160px;
 }
 
-/*
-  过滤器选择框：通过“假的标签芯片”展示当前选项，
-  同时隐藏 Naive UI 默认的标签/计数，避免视觉拥挤。
-*/
+/* 自定义筛选选择框容器：用于叠放“芯片式前缀标签”。 */
 .filter-select {
-  position: relative;
+    /* 作为绝对定位芯片的参考系。 */
+    position: relative;
+    /* 与选择框宽度一致。 */
+    width: 120px;
 }
 
-/* 过滤器“假标签”芯片：展示当前选项文案。 */
+/* Arco Select 外层尺寸约束。 */
+.filter-select .arco-select {
+    /* 固定宽度。 */
+    width: 120px;
+    /* 固定高度。 */
+    height: 28px;
+}
+
+/* Arco Select 视图层尺寸约束。 */
+.filter-select .arco-select-view {
+    /* 固定可视宽度。 */
+    width: 120px;
+    /* 最小宽度锁定。 */
+    min-width: 120px;
+    /* 固定高度。 */
+    height: 28px;
+    /* 最小高度锁定。 */
+    min-height: 28px;
+    /* 行高与高度一致，文本垂直居中。 */
+    line-height: 28px;
+}
+
+/* 前缀芯片：显示当前筛选字段简称。 */
 .filter-select-chip {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  pointer-events: none;
-  display: inline-flex;
-  align-items: center;
+    /* 使用绝对定位覆盖在选择框内部左侧。 */
+    position: absolute;
+    /* 顶部偏移。 */
+    top: 4px;
+    /* 左侧偏移。 */
+    left: 8px;
+    /* 芯片不拦截鼠标事件，点击仍交给选择框。 */
+    pointer-events: none;
+    /* 内联 Flex 便于芯片内容居中。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
 }
 
-/* 选择框主体：给芯片留出左侧空间。 */
-.filter-select .n-base-selection {
-  padding-left: 56px;
+/* 给选择框内容左侧预留芯片空间。 */
+.filter-select .arco-select-view {
+    /* 左内边距扩展到 56px。 */
+    padding-left: 56px;
 }
 
-/* 隐藏默认标签/占位文本，避免重复显示。 */
-.filter-select .n-base-selection-label,
-.filter-select .n-base-selection-placeholder {
-  opacity: 0;
+/* 输入态与值显示区统一高度。 */
+.filter-select .arco-select-view-input,
+.filter-select .arco-select-view-value {
+    /* 高度统一为 28px。 */
+    height: 28px;
+    /* 行高统一为 28px。 */
+    line-height: 28px;
 }
 
-/* 隐藏 Naive UI 默认标签列表。 */
-.filter-select .n-base-selection-tags,
-.filter-select .n-base-selection-tag,
-.filter-select .n-base-selection-tag-wrapper {
-  display: none !important;
+/* 隐藏原生值与占位文本，改用自定义芯片 + 外部显示策略。 */
+.filter-select .arco-select-view-value,
+.filter-select .arco-select-view-placeholder,
+.filter-select .arco-select-view-tag,
+.filter-select .arco-select-view-tag-more {
+    /* 透明化以保留布局但不显示原文案。 */
+    opacity: 0;
 }
 
-/* 过滤字段标签：小号加粗。 */
+/* 强制隐藏占位文本，避免与芯片重叠。 */
+.filter-select .arco-select-view-placeholder {
+    /* 使用 !important 覆盖组件库默认样式。 */
+    display: none !important;
+}
+
+/* 筛选标签文本样式。 */
 .filter-label {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
+    /* 小字号。 */
+    font-size: 12px;
+    /* 次级文字颜色。 */
+    color: var(--color-text-3);
+    /* 半粗体提升可读性。 */
+    font-weight: 600;
+    /* 文本左对齐。 */
+    text-align: left;
+    /* 不换行，保持标签整齐。 */
+    white-space: nowrap;
 }
 
-/* 过滤加载提示：小号浅色。 */
+/* 筛选加载提示文本。 */
 .filter-loading {
-  display: inline-block;
-  margin-top: 8px;
-  color: #6b7280;
-  font-size: 12px;
+    /* 行内块元素便于跟随文字流。 */
+    display: inline-block;
+    /* 顶部留间距。 */
+    margin-top: 8px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 小字号。 */
+    font-size: 12px;
 }
 
-/* 强制隐藏所有计数/溢出提示标签。 */
-.filter-panel .n-base-selection-tag__num,
-.filter-panel .n-base-selection-tag__count,
-.filter-panel .n-base-selection-tag__counter,
-.filter-panel .n-base-selection-tag__overflow,
-.filter-panel .n-base-selection-tag__rest,
-.filter-panel .n-base-selection-tag--overflow,
-.filter-panel .n-base-selection-tag--counter,
-.filter-panel .n-base-selection-tags__extra,
-.filter-panel .n-base-selection-tags__count {
-  display: none !important;
-}
-
-/* Aggressive guard: hide any counter/overflow/rest elements inside selection */
-/* 进一步兜底隐藏任何带 counter/overflow/rest 的元素。 */
-.filter-panel .n-base-selection [class*="counter"],
-.filter-panel .n-base-selection [class*="overflow"],
-.filter-panel .n-base-selection [class*="rest"] {
-  display: none !important;
-}
-
-/* 只保留第一个标签，避免多选时挤占空间。 */
-.filter-panel .n-base-selection-tags .n-tag:not(:first-child),
-.filter-panel .n-base-selection-tags .n-base-selection-tag:nth-child(n + 2) {
-  display: none !important;
-}
-
-/* Hide Naive UI NSelect overflow count placeholder (the '+N' pill) */
-/* Hide Naive UI NSelect overflow count placeholder (the '+N' pill) */
-.filter-panel .n-base-selection-tag--placeholder {
-  display: none !important;
-}
-/* 查询操作区：按钮左对齐并避免换行。 */
+/* 查询动作栏（按钮/下拉）对齐策略。 */
 .query-actions {
-  justify-content: flex-start;
-  flex-wrap: nowrap;
+    /* 从左侧开始排布控件。 */
+    justify-content: flex-start;
+    /* 禁止换行，保持一排操作。 */
+    flex-wrap: nowrap;
 }
 
-/* 查询操作控件：统一最小宽度。 */
-.query-actions :is(.n-select, .n-button) {
-  min-width: 180px;
+/* 动作栏内选择框和按钮最小宽度统一。 */
+.query-actions :is(.arco-select, .arco-btn) {
+    /* 保证触控面积与视觉一致。 */
+    min-width: 180px;
 }
 
-/* 查询进度条区域：底部留白。 */
-.query-progress {
-  margin-bottom: 12px;
+/* 动作栏里的选择框给出更宽尺寸。 */
+.query-actions .arco-select {
+    /* 固定 200px，容纳较长选项文案。 */
+    width: 200px;
 }
 
-/*
-  结果区：高度受限，内部滚动。
-  使用 flex 让列表与详情区在同一高度下伸缩。
-*/
-.result-panel {
-  width: 100%;
-  max-width: none;
-  flex: 1;
-  min-height: 0;
-  max-height: 79vh;
-  padding-bottom: 12px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 结果内容区：纵向布局并允许内部溢出隐藏。 */
-.result-content {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 8px;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* 结果摘要卡片内容：稍微压缩底部内边距。 */
-.result-summary .n-card__content {
-  padding-bottom: 9px;
-}
-
-/* 结果列表卡片内容：可滚动区域。 */
-.result-list .n-card__content {
-  padding-top: 8px;
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  max-height: 72vh;
-}
-
-/* 结果列表网格：单列并控制间距。 */
-.result-list-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  padding-bottom: 6px;
-}
-
-/* 结果列表侧栏：固定 25% 宽度。 */
-.result-list {
-  width: 25%;
-  max-width: 25%;
-  min-width: 0;
-  min-height: 0;
-  align-self: flex-start;
-}
-
-/*
-  结果列表项：hover 轻微“弹起”和旋转，突出可点击。
-  transform-origin 放在右侧，配合内容更自然。
-*/
-.result-list-item {
-  display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 6px;
-  align-items: center;
-  padding: 4px;
-  border-radius: 10px;
-  background: #f7f8fb;
-  min-width: 0;
-  cursor: pointer;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  transform-origin: right center;
-}
-
-/* 列表项 hover：放大并加阴影，强调可点。 */
-.result-list-item:hover {
-  background: #eef2f8;
-  transform: translateY(-10px) translateX(20px) scale(1.08) rotateZ(-1.5deg);
-  box-shadow: 0 16px 32px rgba(30, 50, 80, 0.22);
-}
-
-/* 键盘聚焦态：绿色描边保证可访问性。 */
-.result-list-item:focus-visible {
-  outline: 2px solid #18a058;
-  outline-offset: 2px;
-}
-
-/* 列表缩略图容器：固定尺寸并裁剪。 */
-.result-list-thumb {
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #e6e8ee;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-/* 缩略图图片：填满容器并保持比例。 */
-.result-list-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  transition: transform 0.25s ease, object-fit 0.25s ease;
-}
-
-/* hover 时缩略图放大并浮起。 */
-.result-list-item:hover .result-list-thumb {
-  overflow: visible;
-  transform: scale(1.35);
-  box-shadow: 0 12px 24px rgba(30, 50, 80, 0.25);
-  z-index: 1;
-}
-
-/* hover 时图片切为 contain，避免裁切。 */
-.result-list-item:hover .result-list-thumb img {
-  object-fit: contain;
-  transform: scale(1.15);
-  transform-origin: right center;
-}
-
-/* 列表标题：加粗并允许换行。 */
-.result-list-title {
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 1.4;
-  margin-bottom: 4px;
-  word-break: break-word;
-}
-
-
-/* 结果布局：列表 + 详情左右分栏。 */
-.result-layout {
-  margin-top: 8px;
-  display: flex;
-  min-height: 0;
-  gap: 12px;
-  justify-content: flex-start;
-  overflow: hidden;
-  flex: 1;
-}
-
-/* 详情面板：与列表按 25/75 比例分栏。 */
-.detail-panel {
-  width: 75%;
-  max-width: 75%;
-  min-width: 0;
-  min-height: 0;
-  align-self: flex-start;
-}
-
-/* 详情卡片内容区：内部滚动以适配长内容。 */
-.detail-panel .n-card__content {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  max-height: 72vh;
-}
-
-/* 详情主体：媒体与信息左右布局。 */
-.detail-panel-body {
-  height: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-height: 0;
-}
-
-/* 详情媒体区：占 1/3 宽度，图片居中显示。 */
-.detail-media {
-  width: 33.3333%;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 4px;
-  min-width: 0;
-}
-
-/* 详情图片：保持比例并适配容器。 */
-.detail-image {
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-  display: block;
-}
-
-/* 详情信息区：占 2/3，纵向信息分组显示。 */
-.detail-info {
-  width: 66.6667%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 详情标题：较大字号突出名称。 */
-.detail-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2f333a;
-}
-
-/* 详情操作按钮区：可换行排列。 */
-.detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* 详情按钮主题色：自定义 Naive UI 变量。 */
-.detail-actions .n-button {
-  --n-border-color: #d0d7de;
-  --n-border-color-hover: #afb8c1;
-  --n-color: #f6f8fa;
-  --n-color-hover: #ebf0f4;
-  --n-text-color: #1f2328;
-  --n-text-color-hover: #111418;
-  --n-color-primary: #2d6ac8;
-  --n-color-primary-hover: #21539f;
-  --n-text-color-primary: #ffffff;
-}
-
-/* 主要按钮：使用品牌蓝。 */
-.detail-actions .n-button.primary {
-  background: #2d6ac8;
-  color: #ffffff;
-  border-color: #2d6ac8;
-}
-
-/* 标题链接：默认蓝色并去下划线。 */
-.detail-title-link {
-  text-decoration: none;
-  color: #1f6feb;
-  transition: color 0.2s ease;
-}
-
-/* 标题链接 hover：加深颜色并下划线。 */
-.detail-title-link:hover {
-  color: #1158c7;
-  text-decoration: underline;
-}
-
-/* 详情信息列表：纵向分组。 */
-.detail-info-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 信息行：两列标签-值布局。 */
-.detail-info-row {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 8px;
-  align-items: start;
-}
-
-/* 信息标签：加粗浅色。 */
-.detail-label {
-  font-weight: 600;
-  color: #5a5f6b;
-}
-
-/* 信息值：允许断词。 */
-.detail-value {
-  color: #2f333a;
-  word-break: break-word;
-}
-
-/* 评分展示：星星与分数并排。 */
-.detail-rating {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 星级样式：金色星星。 */
-.detail-stars {
-  color: #f5a524;
-  font-size: 16px;
-  letter-spacing: 1px;
-}
-
-/* 评分数值：加粗突出。 */
-.detail-score {
-  font-weight: 600;
-  color: #2f333a;
-}
-
-/* 分隔符：细小中性色。 */
-.detail-divider {
-  display: inline-block;
-  margin: 0 6px;
-  color: #8a90a0;
-}
-
-/* 简介文本：保留换行并提高行高。 */
-.detail-summary {
-  white-space: pre-line;
-  line-height: 1.6;
-}
-
-/* 翻译标记：小号浅色标签。 */
-.detail-translate-tag {
-  margin-left: 6px;
-  color: #8a90a0;
-  font-size: 12px;
-}
-
-/* 详情链接：蓝色并允许断词。 */
-.detail-link {
-  color: #2d6ac8;
-  word-break: break-word;
-}
-
-/* 链接列表：可换行排列。 */
-.detail-link-list {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-}
-
-/* 链接默认态：无下划线。 */
-.detail-link-list .detail-link {
-  text-decoration: none;
-}
-
-/* 链接 hover：显示下划线。 */
-.detail-link-list .detail-link:hover {
-  text-decoration: underline;
-}
-
-/* 右侧侧边栏：固定宽度列表，内部滚动。 */
-.result-sidebar {
-  width: 260px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 侧边栏卡片内容：纵向堆叠并隐藏溢出。 */
-.result-sidebar .n-card__content {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 侧边栏列表：可滚动列表区。 */
-.sidebar-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 6px;
-  padding-bottom: 8px;
-  flex: 1;
-}
-
-/* 侧边栏条目：缩略图 + 标题 + 月份。 */
-.sidebar-item {
-  display: grid;
-  grid-template-columns: 64px 1fr auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* 侧边栏缩略图容器：固定尺寸。 */
-.sidebar-thumb {
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #e6e8ee;
-}
-
-/* 侧边栏缩略图：填满容器。 */
-.sidebar-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-/* 侧边栏标题：加粗突出。 */
-.sidebar-title {
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 1.4;
-  color: inherit;
-}
-
-/* 侧边栏月份徽章：小号圆角标签。 */
-.sidebar-month {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #eef1f6;
-  color: #5a6070;
-  font-weight: 600;
-}
-
-/* STAFF 弹窗内容：行高加大，提升阅读性。 */
-.staff-modal-body {
-  color: #4c4f56;
-  line-height: 1.6;
-}
-
-/* STAFF 弹窗标题：加粗并与内容分隔。 */
-.staff-modal-title {
-  font-weight: 600;
-  margin: 0 0 8px;
-}
-
-/* STAFF 分组列表：纵向排列。 */
-.staff-group-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* STAFF 单组：角色 + 人员列表。 */
-.staff-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* STAFF 角色名：加粗突出。 */
-.staff-role {
-  font-weight: 600;
-  color: #2f333a;
-}
-
-/* STAFF 人员列表：可换行排列。 */
-.staff-people {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-}
-
-/* STAFF 人员链接：蓝色强调。 */
-.staff-link {
-  color: #2d6ac8;
-  text-decoration: none;
-}
-
-/* STAFF 链接 hover：下划线提示。 */
-.staff-link:hover {
-  text-decoration: underline;
-}
-
-/* 进度面板：占满宽度，去除内边距。 */
+/* 进度面板区域。 */
 .progress-panel {
-  width: 100%;
-  max-width: none;
-  padding: 0;
+    /* 与下方列表留出间距。 */
+    margin-bottom: 12px;
+    /* 横向占满。 */
+    width: 100%;
+    /* 左右补内边距，避免紧贴边界。 */
+    padding: 0 12px;
 }
 
-/* 结果加载进度：底部留白。 */
-.result-progress {
-  margin-bottom: 12px;
+/* 结果面板外层：负责纵向滚动与高度上限控制。 */
+.result-panel {
+    /* 占满父容器宽度。 */
+    width: 100%;
+    /* 取消额外最大宽度限制。 */
+    max-width: none;
+    /* 在父级 Flex 中占用剩余空间。 */
+    flex: 1;
+    /* 允许内部子项收缩。 */
+    min-height: 0;
+    /* 限制最大高度，避免超高内容影响整体布局。 */
+    max-height: 79vh;
+    /* 底部内边距，防止内容贴边。 */
+    padding-bottom: 12px;
+    /* 纵向可滚动。 */
+    overflow-y: auto;
+    /* 横向隐藏溢出，避免出现横向滚动条。 */
+    overflow-x: hidden;
+    /* 使用 Flex 纵向组织内部区域。 */
+    display: flex;
+    /* 纵向主轴。 */
+    flex-direction: column;
 }
 
-/* 结果网格：用于卡片列表布局。 */
-.result-grid {
-  margin-top: 12px;
+/* 结果内容主容器。 */
+.result-content {
+    /* 使用 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 区块间距。 */
+    gap: 8px;
+    /* 填满父容器剩余高度。 */
+    flex: 1;
+    /* 禁止自身滚动，滚动交由更外层控制。 */
+    overflow: hidden;
 }
 
-/* 结果卡片：固定宽度。 */
-.result-item {
-  width: 220px;
+/* 结果列表卡片主体滚动区。 */
+.result-list .arco-card-body {
+    /* 顶部内边距。 */
+    padding-top: 8px;
+    /* 占满父级高度。 */
+    height: 100%;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 纵向滚动。 */
+    overflow-y: auto;
+    /* 横向隐藏溢出。 */
+    overflow-x: hidden;
+    /* 与详情卡保持一致的最大高度。 */
+    max-height: 72vh;
 }
 
-/* 结果卡片图片：圆角展示。 */
-.result-item img {
-  width: 100%;
-  border-radius: 8px;
-  display: block;
+/* 结果列表网格：单列卡片流。 */
+.result-list-grid {
+    /* 使用 Grid 便于控制行间距。 */
+    display: grid;
+    /* 单列布局。 */
+    grid-template-columns: 1fr;
+    /* 行间距。 */
+    gap: 6px;
+    /* 底部内边距。 */
+    padding-bottom: 6px;
+    /* 占满可用宽度。 */
+    width: 100%;
 }
 
-/* 通用错误文本：红色提示。 */
-.error-text {
-  color: #d03050;
+/* 左侧结果列表区：占 25% 宽度。 */
+.result-list {
+    /* 宽度比例。 */
+    width: 25%;
+    /* 最大宽度同样锁定为 25%。 */
+    max-width: 25%;
+    /* 允许内容收缩。 */
+    min-width: 0;
+    /* 高度收缩友好。 */
+    min-height: 0;
+    /* 顶部对齐，避免与右侧详情垂直居中错位。 */
+    align-self: flex-start;
 }
 
-/* 观看列表页面：与搜索/下载页一致的对齐风格。 */
-.list-view {
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 16px;
+/* 单个结果项卡片。 */
+.result-list-item {
+    /* 使用两列 Grid：左缩略图 + 右文本。 */
+    display: grid;
+    /* 缩略图 60px，文本自适应。 */
+    grid-template-columns: 60px 1fr;
+    /* 列间距。 */
+    gap: 6px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 内边距。 */
+    padding: 4px;
+    /* 圆角卡片。 */
+    border-radius: 10px;
+    /* 默认背景色。 */
+    background: var(--color-fill-1);
+    /* 允许内部文本收缩。 */
+    min-width: 0;
+    /* 占满父宽。 */
+    width: 100%;
+    /* 鼠标指针提示可点击。 */
+    cursor: pointer;
+    /* 过渡背景、阴影与位移，形成交互反馈。 */
+    transition:
+        background-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.2s ease;
+    /* 缩放和旋转以右侧中心为基准，更符合列表“弹出”感。 */
+    transform-origin: right center;
 }
 
-/* 观看列表卡片：限制高度并允许内部滚动。 */
-.watchlist-card {
-  width: 100%;
-  max-width: 1400px;
-  min-height: 0;
-  max-height: 92vh;
-  overflow: auto;
+/* 结果项悬停态：强调当前焦点。 */
+.result-list-item:hover {
+    /* 背景加深。 */
+    background: var(--color-fill-2);
+    /* 位移 + 缩放 + 微旋转制造层次。 */
+    transform: translateY(-10px) translateX(20px) scale(1.08) rotateZ(-1.5deg);
+    /* 投影增强立体感。 */
+    box-shadow: 0 16px 32px rgba(30, 50, 80, 0.22);
 }
 
-/* 观看分组列表：纵向排列多个分区。 */
-.watchlist-section-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 键盘可访问性焦点态。 */
+.result-list-item:focus-visible {
+    /* 高对比描边。 */
+    outline: 2px solid var(--color-primary-6);
+    /* 描边外扩避免覆盖内容。 */
+    outline-offset: 2px;
 }
 
-/* 观看分区：标题 + 网格内容。 */
-.watchlist-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* 缩略图容器。 */
+.result-list-thumb {
+    /* 固定宽度。 */
+    width: 60px;
+    /* 固定高度。 */
+    height: 60px;
+    /* 圆角裁切。 */
+    border-radius: 8px;
+    /* 默认隐藏溢出。 */
+    overflow: hidden;
+    /* 底色。 */
+    background: var(--color-fill-2);
+    /* 缩放与阴影过渡。 */
+    transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease;
 }
 
-/* 分区标题：加粗并稍大。 */
+/* 缩略图图片本体。 */
+.result-list-thumb img {
+    /* 填满容器宽度。 */
+    width: 100%;
+    /* 填满容器高度。 */
+    height: 100%;
+    /* 默认裁切铺满。 */
+    object-fit: cover;
+    /* 居中取景。 */
+    object-position: center;
+    /* 去除图片默认 inline 间隙。 */
+    display: block;
+    /* 过渡缩放与 object-fit 变化。 */
+    transition:
+        transform 0.25s ease,
+        object-fit 0.25s ease;
+}
+
+/* 列表项悬停时缩略图放大出框。 */
+.result-list-item:hover .result-list-thumb {
+    /* 允许溢出显示放大效果。 */
+    overflow: visible;
+    /* 放大缩略图。 */
+    transform: scale(1.35);
+    /* 增强阴影。 */
+    box-shadow: 0 12px 24px rgba(30, 50, 80, 0.25);
+    /* 提升层级避免被邻项遮挡。 */
+    z-index: 1;
+}
+
+/* 列表项悬停时图片切换到完整显示策略。 */
+.result-list-item:hover .result-list-thumb img {
+    /* 改为 contain，尽量显示完整封面。 */
+    object-fit: contain;
+    /* 轻微放大。 */
+    transform: scale(1.15);
+    /* 以右侧中心缩放，呼应整体动画方向。 */
+    transform-origin: right center;
+}
+
+/* 列表标题文本。 */
+.result-list-title {
+    /* 半粗体突出标题。 */
+    font-weight: 600;
+    /* 字号。 */
+    font-size: 14px;
+    /* 行高提升可读性。 */
+    line-height: 1.4;
+    /* 与下方元信息留间距。 */
+    margin-bottom: 4px;
+    /* 长词换行。 */
+    word-break: break-word;
+}
+
+/* 结果区左右布局容器。 */
+.result-layout {
+    /* 顶部间距。 */
+    margin-top: 8px;
+    /* 左右两栏 Flex 布局。 */
+    display: flex;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 两栏间距。 */
+    gap: 12px;
+    /* 左对齐。 */
+    justify-content: flex-start;
+    /* 隐藏溢出，避免动画影响外层。 */
+    overflow: hidden;
+    /* 占用剩余高度。 */
+    flex: 1;
+}
+
+/* 右侧详情面板：占结果区 75% 宽度。 */
+.detail-panel {
+    /* 宽度比例。 */
+    width: 75%;
+    /* 最大宽度同样锁定。 */
+    max-width: 75%;
+    /* 允许文本区域收缩。 */
+    min-width: 0;
+    /* 允许高度收缩。 */
+    min-height: 0;
+    /* 顶部对齐。 */
+    align-self: flex-start;
+}
+
+/* 详情卡片主体滚动区。 */
+.detail-panel .arco-card-body {
+    /* 占满父级高度。 */
+    height: 100%;
+    /* 可收缩。 */
+    min-height: 0;
+    /* 允许滚动查看长内容。 */
+    overflow: auto;
+    /* 最大高度与左侧列表保持一致。 */
+    max-height: 72vh;
+}
+
+/* 详情区内部两栏布局容器。 */
+.detail-panel-body {
+    /* 占满卡片高度。 */
+    height: 100%;
+    /* 使用 Flex 横向布局。 */
+    display: flex;
+    /* 顶部对齐。 */
+    align-items: flex-start;
+    /* 两栏间距。 */
+    gap: 12px;
+    /* 可收缩。 */
+    min-height: 0;
+}
+
+/* 详情左侧媒体列。 */
+.detail-media {
+    /* 占三分之一宽度。 */
+    width: 33.3333%;
+    /* 使用 Flex 便于图片定位。 */
+    display: flex;
+    /* 顶部对齐。 */
+    align-items: flex-start;
+    /* 水平居中图片。 */
+    justify-content: center;
+    /* 内边距。 */
+    padding: 4px;
+    /* 允许收缩。 */
+    min-width: 0;
+}
+
+/* 详情封面图片样式。 */
+.detail-image {
+    /* 不超过容器宽度。 */
+    max-width: 100%;
+    /* 高度按比例自适应。 */
+    height: auto;
+    /* 完整展示图片。 */
+    object-fit: contain;
+    /* 去除 inline 间隙。 */
+    display: block;
+}
+
+/* 详情右侧信息列。 */
+.detail-info {
+    /* 占三分之二宽度。 */
+    width: 66.6667%;
+    /* 允许长文本收缩换行。 */
+    min-width: 0;
+    /* 使用纵向布局。 */
+    display: flex;
+    /* 子项纵向排列。 */
+    flex-direction: column;
+    /* 各信息块间距。 */
+    gap: 8px;
+}
+
+/* 详情标题文本。 */
+.detail-title {
+    /* 标题字号。 */
+    font-size: 18px;
+    /* 标题字重。 */
+    font-weight: 600;
+    /* 主文字颜色。 */
+    color: var(--color-text-1);
+}
+
+/* 详情操作按钮组。 */
+.detail-actions {
+    /* 使用 Flex 横向布局。 */
+    display: flex;
+    /* 允许按钮自动换行。 */
+    flex-wrap: wrap;
+    /* 按钮间距。 */
+    gap: 8px;
+}
+
+/* 标题链接默认态。 */
+.detail-title-link {
+    /* 默认去下划线。 */
+    text-decoration: none;
+    /* 使用主题主色。 */
+    color: var(--color-primary-6);
+    /* 仅过渡颜色变化。 */
+    transition: color 0.2s ease;
+}
+
+/* 标题链接悬停态。 */
+.detail-title-link:hover {
+    /* 悬停时加深主色。 */
+    color: var(--color-primary-7);
+    /* 增加下划线提示可点击。 */
+    text-decoration: underline;
+}
+
+/* 详情信息列表容器。 */
+.detail-info-list {
+    /* 纵向排列信息行。 */
+    display: flex;
+    /* 纵向布局。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+}
+
+/* 单行详情信息：左标签右值。 */
+.detail-info-row {
+    /* 使用 Grid 对齐标签和值。 */
+    display: grid;
+    /* 标签宽 72px，值列自适应。 */
+    grid-template-columns: 72px 1fr;
+    /* 列间距。 */
+    gap: 8px;
+    /* 顶部对齐，适配多行文本。 */
+    align-items: start;
+}
+
+/* 详情标签文字。 */
+.detail-label {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 详情值文字。 */
+.detail-value {
+    /* 主文字色。 */
+    color: var(--color-text-1);
+    /* 长文本换行。 */
+    word-break: break-word;
+}
+
+/* 评分区域容器。 */
+.detail-rating {
+    /* 内联 Flex 方便跟随文本布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 8px;
+}
+
+/* 星级文本默认样式。 */
+.detail-stars {
+    /* 默认使用次级文字色。 */
+    color: var(--color-text-3);
+    /* 星号字号。 */
+    font-size: 16px;
+    /* 字符间距略增，增强可读性。 */
+    letter-spacing: 1px;
+}
+
+/* 高分颜色。 */
+.detail-stars.rating-high {
+    /* 成功色。 */
+    color: var(--color-success-6) !important;
+}
+
+/* 中分颜色。 */
+.detail-stars.rating-medium {
+    /* 警告色。 */
+    color: var(--color-warning-6) !important;
+}
+
+/* 低分颜色。 */
+.detail-stars.rating-low {
+    /* 危险色。 */
+    color: var(--color-danger-6) !important;
+}
+
+/* 无分或中性分颜色。 */
+.detail-stars.rating-neutral {
+    /* 保持次级文字色。 */
+    color: var(--color-text-3) !important;
+}
+
+/* 保证星级内部字符继承统一颜色。 */
+.detail-stars,
+.detail-stars * {
+    /* 强制继承父元素颜色，避免组件库默认色干扰。 */
+    color: inherit !important;
+}
+
+/* 详情分数文本样式。 */
+.detail-score {
+    /* 半粗体突出分数。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 详情区域分隔符。 */
+.detail-divider {
+    /* 内联块便于跟随文本流。 */
+    display: inline-block;
+    /* 左右留间距。 */
+    margin: 0 6px;
+    /* 次级文字色弱化分隔符。 */
+    color: var(--color-text-3);
+}
+
+/* 详情简介/描述文本块。 */
+.detail-summary {
+    /* 保留原始换行，便于阅读长描述。 */
+    white-space: pre-line;
+    /* 行高增加可读性。 */
+    line-height: 1.6;
+}
+
+/* 翻译标签（标注机翻或人工翻译）。 */
+.detail-translate-tag {
+    /* 与前方内容留间距。 */
+    margin-left: 6px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 小字号。 */
+    font-size: 12px;
+}
+
+/* 详情外链文本颜色。 */
+.detail-link {
+    /* 使用成功色突出链接。 */
+    color: var(--color-success-6) !important;
+    /* 长链接换行。 */
+    word-break: break-word;
+}
+
+/* 详情链接列表容器。 */
+.detail-link-list {
+    /* 内联 Flex 便于跟文本流。 */
+    display: inline-flex;
+    /* 多链接自动换行。 */
+    flex-wrap: wrap;
+    /* 链接间距。 */
+    gap: 6px 12px;
+}
+
+/* 详情和 Staff 链接文本共用样式。 */
+.detail-link-text,
+.staff-link-text {
+    /* 指针提示可点击。 */
+    cursor: pointer;
+    /* 默认无下划线。 */
+    text-decoration: none;
+}
+
+/* 详情和 Staff 链接悬停态。 */
+.detail-link-text:hover,
+.staff-link-text:hover {
+    /* 悬停时显示下划线反馈。 */
+    text-decoration: underline;
+}
+
+/* 追番预览页容器：用于在查询页展示快速追番统计。 */
+.tracking-preview {
+    /* 顶部对齐。 */
+    align-items: flex-start;
+    /* 水平居中。 */
+    justify-content: center;
+    /* 统一内边距。 */
+    padding: 16px 24px 24px;
+}
+
+/* 追番预览卡片宽度限制。 */
+.tracking-preview__card {
+    /* 最大 1080px，小屏不超容器。 */
+    width: min(1080px, 100%);
+}
+
+/* 追番预览标题：去默认外边距。 */
+.tracking-preview__title {
+    /* 标题无外边距。 */
+    margin: 0;
+}
+
+/* 追番预览标签文本颜色。 */
+.tracking-preview__label {
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 追番预览面板最小高度约束。 */
+.tracking-preview__panel {
+    /* 保证至少 360px 高，避免内容过少时塌陷。 */
+    min-height: 360px;
+}
+
+/* 追番预览三列网格。 */
+.tracking-preview__grid {
+    /* 使用 Grid 三列布局。 */
+    display: grid;
+    /* 三列等宽，允许内容收缩。 */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* 列间距。 */
+    gap: 12px;
+}
+
+/* 追番预览单项卡片。 */
+.tracking-preview__item {
+    /* 三级背景。 */
+    background: var(--color-bg-3);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 追番预览看板（在看/想看）两列布局。 */
+.tracking-preview__kanban {
+    /* 使用 Grid 两列布局。 */
+    display: grid;
+    /* 两列等宽。 */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* 列间距。 */
+    gap: 12px;
+}
+
+/* 看板单列容器。 */
+.tracking-preview__column {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列子项。 */
+    flex-direction: column;
+    /* 子项间距。 */
+    gap: 8px;
+}
+
+/* 看板列标题。 */
+.tracking-preview__column-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 在看页主容器。 */
+.tracking-watching {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 区块间距。 */
+    gap: 16px;
+    /* 统一内边距。 */
+    padding: 16px 24px 24px;
+    /* 占满父容器剩余空间。 */
+    flex: 1;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 允许滚动。 */
+    overflow: auto;
+    /* 占满高度。 */
+    height: 100%;
+}
+
+/* 积压页主容器。 */
+.tracking-backlog {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 区块间距。 */
+    gap: 16px;
+    /* 统一内边距。 */
+    padding: 16px 24px 24px;
+    /* 占满剩余空间。 */
+    flex: 1;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 允许滚动。 */
+    overflow: auto;
+    /* 占满高度。 */
+    height: 100%;
+}
+
+/* 看完页主容器。 */
+.tracking-finished {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 区块间距。 */
+    gap: 16px;
+    /* 统一内边距。 */
+    padding: 16px 24px 24px;
+    /* 占满剩余空间。 */
+    flex: 1;
+    /* 允许收缩。 */
+    min-height: 0;
+    /* 允许滚动。 */
+    overflow: auto;
+    /* 占满高度。 */
+    height: 100%;
+}
+
+/* 积压页空状态容器。 */
+.tracking-backlog__empty {
+    /* 上边距分隔。 */
+    padding: 24px 0 8px;
+}
+
+/* 看完页空状态容器。 */
+.tracking-finished__empty {
+    /* 上边距分隔。 */
+    padding: 24px 0 8px;
+}
+
+/* 积压页空状态文本容器。 */
+.tracking-backlog__empty-text {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 文本行间距。 */
+    gap: 4px;
+    /* 文本居中。 */
+    text-align: center;
+}
+
+/* 看完页空状态文本容器。 */
+.tracking-finished__empty-text {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 文本行间距。 */
+    gap: 4px;
+    /* 文本居中。 */
+    text-align: center;
+}
+
+/* 积压页空状态主标题。 */
+.tracking-backlog__empty-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 看完页空状态主标题。 */
+.tracking-finished__empty-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 积压页空状态副标题。 */
+.tracking-backlog__empty-subtitle {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 看完页空状态副标题。 */
+.tracking-finished__empty-subtitle {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 在看页英雄区（暂时隐藏）。 */
+.tracking-watching__hero {
+    /* 默认不显示，预留扩展位。 */
+    display: none;
+}
+
+/* 在看页英雄区内容块。 */
+.tracking-watching__hero-content {
+    /* 横向布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 两端对齐。 */
+    justify-content: space-between;
+    /* 元素间距。 */
+    gap: 16px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+}
+
+/* 在看页英雄文本区。 */
+.tracking-watching__hero-text {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 4px;
+}
+
+/* 在看页英雄标题。 */
+.tracking-watching__hero-title {
+    /* 去默认外边距。 */
+    margin: 0;
+}
+
+/* 在看页英雄元信息行。 */
+.tracking-watching__hero-meta {
+    /* 横向布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 12px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+}
+
+/* 在看页计数徽章。 */
+.tracking-watching__count {
+    /* 内联 Flex 便于跟随文本流。 */
+    display: inline-flex;
+    /* 基线对齐数字和文本。 */
+    align-items: baseline;
+    /* 元素间距。 */
+    gap: 6px;
+    /* 内边距。 */
+    padding: 4px 10px;
+    /* 胶囊形边框。 */
+    border-radius: 999px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+    /* 边框。 */
+    border: 1px solid var(--color-border-2);
+}
+
+/* 计数徽章标签文字。 */
+.tracking-watching__count-label {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 计数徽章数值文字。 */
+.tracking-watching__count-value {
+    /* 半粗体突出数字。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 计数徽章单位文字。 */
+.tracking-watching__count-unit {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 小字号。 */
+    font-size: 12px;
+}
+
+/* 在看页空状态容器。 */
+.tracking-watching__empty {
+    /* 上边距分隔。 */
+    padding: 24px 0 8px;
+}
+
+/* 在看页空状态文本容器。 */
+.tracking-watching__empty-text {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 4px;
+    /* 文本居中。 */
+    text-align: center;
+}
+
+/* 在看页空状态主标题。 */
+.tracking-watching__empty-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 在看页空状态副标题。 */
+.tracking-watching__empty-subtitle {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 在看页时间线容器。 */
+.tracking-watching__timeline {
+    /* 纵向布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 区块间距。 */
+    gap: 16px;
+}
+
+/* 在看页周几分组容器（时间线视觉主体）。 */
+.tracking-watching__group {
+    /* 网格布局，左侧标记右侧内容。 */
+    display: grid;
+    /* 左列固定 120px，右列自适应。 */
+    grid-template-columns: 120px 1fr;
+    /* 区块间距。 */
+    gap: 16px;
+    /* 顶部对齐。 */
+    align-items: start;
+    /* 相对定位锚点（伪元素时间线）。 */
+    position: relative;
+}
+
+/* 分组主时间线（渐变竖线）。 */
+.tracking-watching__group::before {
+    /* 伪元素占位。 */
+    content: "";
+    /* 绝对定位。 */
+    position: absolute;
+    /* 左偏 11px 与标记对齐。 */
+    left: 11px;
+    /* 向上延伸超出 gap。 */
+    top: -16px;
+    /* 向下延伸超出 gap。 */
+    bottom: -16px;
+    /* 竖线宽度。 */
+    width: 2px;
+    /* 由深到浅渐变主题色。 */
+    background: linear-gradient(to bottom, rgba(22, 93, 255, 0.45), rgba(22, 93, 255, 0.1));
+    /* 光晕效果。 */
+    box-shadow: 0 0 6px rgba(22, 93, 255, 0.15);
+}
+
+/* 分组时间线装饰点阵。 */
+.tracking-watching__group::after {
+    /* 伪元素占位。 */
+    content: "";
+    /* 绝对定位。 */
+    position: absolute;
+    /* 左偏 6px（主线左侧）。 */
+    left: 6px;
+    /* 向上延伸。 */
+    top: -16px;
+    /* 向下延伸。 */
+    bottom: -16px;
+    /* 点阵宽度。 */
+    width: 10px;
+    /* 径向渐变圆点图案。 */
+    background-image: radial-gradient(rgba(22, 93, 255, 0.25) 1px, transparent 1px);
+    /* 点阵尺寸（纵向 10px 间距）。 */
+    background-size: 6px 10px;
+    /* 纵向重复。 */
+    background-repeat: repeat-y;
+    /* 不响应鼠标事件。 */
+    pointer-events: none;
+}
+
+/* 在看页周几标记容器。 */
+.tracking-watching__marker {
+    /* 相对定位（子元素锚点）。 */
+    position: relative;
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 在看页周几标记圆点。 */
+.tracking-watching__dot {
+    /* 圆点宽度。 */
+    width: 12px;
+    /* 圆点高度。 */
+    height: 12px;
+    /* 圆形。 */
+    border-radius: 999px;
+    /* 主题色填充。 */
+    background: var(--color-primary-6);
+    /* 禁止收缩。 */
+    flex-shrink: 0;
+    /* 多层阴影：白色外圈 + 蓝色光晕。 */
+    box-shadow:
+        0 0 0 3px var(--color-bg-1),
+        0 0 10px rgba(22, 93, 255, 0.35);
+    /* 边框。 */
+    border: 1px solid rgba(22, 93, 255, 0.4);
+}
+
+/* 在看页周几文本容器。 */
+.tracking-watching__weekday {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 6px;
+    /* 半粗体。 */
+    font-weight: 600;
+}
+
+/* 周几装饰图标（通用伪元素）。 */
+.tracking-watching__weekday::before {
+    /* 伪元素占位。 */
+    content: "";
+    /* 图标宽度。 */
+    width: 16px;
+    /* 图标高度。 */
+    height: 16px;
+    /* 图片尺寸。 */
+    background-size: 16px 16px;
+    /* 不重复。 */
+    background-repeat: no-repeat;
+    /* 居中对齐。 */
+    background-position: center;
+    /* 半透明。 */
+    opacity: 0.85;
+}
+
+/* 周一图标（双圆同心圆）。 */
+.tracking-watching__weekday--1::before {
+    /* Data URI 内联 SVG：实心圆 + 描边圆环。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3' fill='%23165DFF'/><circle cx='8' cy='8' r='6' fill='none' stroke='%23165DFF' stroke-width='1' opacity='0.5'/></svg>");
+}
+
+/* 周二图标（播放按钮）。 */
+.tracking-watching__weekday--2::before {
+    /* Data URI 内联 SVG：竖线 + 三角形。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M3 2h2v12H3z' fill='%23165DFF'/><path d='M5 3l7 3.5L5 10z' fill='%23165DFF' opacity='0.7'/></svg>");
+}
+
+/* 周三图标（五角星）。 */
+.tracking-watching__weekday--3::before {
+    /* Data URI 内联 SVG：五角星路径。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M8 2l1.5 3 3.3.5-2.4 2.3.6 3.2L8 9.6 5 11l.6-3.2L3.2 5.5 6.5 5z' fill='%23165DFF' opacity='0.85'/></svg>");
+}
+
+/* 周四图标（圆角矩形）。 */
+.tracking-watching__weekday--4::before {
+    /* Data URI 内联 SVG：圆角 rect。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='3' y='3' width='10' height='10' rx='2' fill='%23165DFF' opacity='0.75'/></svg>");
+}
+
+/* 周五图标（菱形）。 */
+.tracking-watching__weekday--5::before {
+    /* Data URI 内联 SVG：四点连接菱形。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M8 2l6 6-6 6-6-6z' fill='%23165DFF' opacity='0.8'/></svg>");
+}
+
+/* 周六图标（月牙形）。 */
+.tracking-watching__weekday--6::before {
+    /* Data URI 内联 SVG：内外圆相减形成月牙。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M10.5 3.2a5.5 5.5 0 1 0 0 9.6 4.5 4.5 0 1 1 0-9.6z' fill='%23165DFF' opacity='0.7'/></svg>");
+}
+
+/* 周日图标（圆形 + 四向线条）。 */
+.tracking-watching__weekday--0::before {
+    /* Data URI 内联 SVG：实心圆 + 十字线。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3' fill='%23165DFF'/><g stroke='%23165DFF' stroke-width='1'><line x1='8' y1='1' x2='8' y2='3'/><line x1='8' y1='13' x2='8' y2='15'/><line x1='1' y1='8' x2='3' y2='8'/><line x1='13' y1='8' x2='15' y2='8'/></g></svg>");
+}
+
+/* 未知周几图标（空心圆环）。 */
+.tracking-watching__weekday--unknown::before {
+    /* Data URI 内联 SVG：单描边圆环。 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='5' fill='none' stroke='%23165DFF' stroke-width='1' opacity='0.6'/></svg>");
+}
+
+/* 在看页周几分组内容区域。 */
+.tracking-watching__content {
+    /* 允许文本截断。 */
+    min-width: 0;
+}
+
+/* 在看页卡片网格容器。 */
+.tracking-watching__grid {
+    /* 网格布局。 */
+    display: grid;
+    /* 自适应列数，每列最小 260px。 */
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    /* 卡片间距。 */
+    gap: 12px;
+}
+
+/* 在看页单个番剧卡片。 */
+.tracking-watching__card {
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 在看卡片标题区（含封面）。 */
+.tracking-watching__card-title {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 12px;
+}
+
+/* 在看卡片封面图片。 */
+.tracking-watching__cover {
+    /* 封面宽度。 */
+    width: 48px;
+    /* 封面高度。 */
+    height: 64px;
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 封面裁剪模式。 */
+    object-fit: cover;
+    /* 加载占位背景。 */
+    background: var(--color-bg-3);
+    /* 禁止收缩。 */
+    flex-shrink: 0;
+}
+
+/* 在看卡片标题文本块。 */
+.tracking-watching__title-block {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 4px;
+    /* 允许文本截断。 */
+    min-width: 0;
+}
+
+/* 在看卡片番剧主标题。 */
+.tracking-watching__title {
+    /* 成功色（绿色）强制覆盖。 */
+    color: var(--color-success-6) !important;
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 紧凑行高。 */
+    line-height: 1.2;
+}
+
+/* 在看卡片番剧副标题。 */
+.tracking-watching__subtitle {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 在看卡片元信息网格（评分、播放时间等）。 */
+.tracking-watching__meta {
+    /* 网格布局。 */
+    display: grid;
+    /* 两列均分。 */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* 行列间距。 */
+    gap: 8px 12px;
+    /* 下边距分隔。 */
+    margin-bottom: 8px;
+}
+
+/* 在看卡片评分容器。 */
+.tracking-watching__rating {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 6px;
+}
+
+/* 评分标签文本（"评分"）。 */
+.tracking-watching__rating-label {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 评分数值文本。 */
+.tracking-watching__rating-value {
+    /* 半粗体突出。 */
+    font-weight: 600;
+}
+
+/* 评分星级文本（"★★★★★"）。 */
+.tracking-watching__rating-stars {
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 小字号。 */
+    font-size: 12px;
+}
+
+/* 在看卡片播放时间容器。 */
+.tracking-watching__air {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 6px;
+}
+
+/* 播放时间标签文本（"播放时间"）。 */
+.tracking-watching__air-label {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 在看卡片集数列表容器（集数芯片）。 */
+.tracking-watching__episodes {
+    /* Flex 布局。 */
+    display: flex;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 元素间距。 */
+    gap: 6px;
+    /* 下边距分隔。 */
+    margin-bottom: 12px;
+}
+
+/* 在看卡片操作按钮区。 */
+.tracking-watching__actions {
+    /* 上边距分隔。 */
+    margin-top: 8px;
+}
+
+/* 看板列表区块标题（积压/看完页通用）。 */
 .watchlist-section-title {
-  font-weight: 700;
-  color: #1f2937;
-  font-size: 15px;
-  padding: 0 2px;
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 去顶边距，仅保留底边距。 */
+    margin: 0 0 8px;
 }
 
-/* 观看列表网格：自适应列数。 */
+/* 看板列表网格容器。 */
 .watchlist-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+    /* 网格布局。 */
+    display: grid;
+    /* 自动填充列，每列固定 370px。 */
+    grid-template-columns: repeat(auto-fill, 370px);
+    /* 卡片间距。 */
+    gap: 12px;
+    /* 默认左对齐。 */
+    justify-content: flex-start;
 }
 
-/* 观看条目卡片：缩略图 + 信息两列。 */
+/* 积压页和看完页的看板网格居中对齐。 */
+.tracking-backlog .watchlist-grid,
+.tracking-finished .watchlist-grid {
+    /* 居中对齐。 */
+    justify-content: center;
+}
+
+/* 看板单项卡片。 */
 .watchlist-item {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px;
-  padding: 10px;
-  border: 1px solid #e4e6eb;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(17, 24, 39, 0.04);
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 元素间距。 */
+    gap: 12px;
+    /* 内边距。 */
+    padding: 12px;
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
 }
 
-/* 观看条目缩略图容器：固定比例。 */
-.watchlist-thumb {
-  width: 120px;
-  height: 160px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #eef1f6;
-}
-
-/* 观看条目缩略图：填满容器。 */
+/* 看板卡片缩略图容器。 */
 .watchlist-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
+    /* 缩略图宽度。 */
+    width: 72px;
+    /* 缩略图高度。 */
+    height: 96px;
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 封面裁剪模式。 */
+    object-fit: cover;
+    /* 加载占位背景。 */
+    background: var(--color-bg-3);
 }
 
-/* 观看条目正文：纵向堆叠文本。 */
+/* 看板卡片信息区。 */
 .watchlist-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 6px;
+    /* 允许文本截断。 */
+    min-width: 0;
 }
 
-/* 观看条目标题：加粗并可点击。 */
+/* 看板卡片番剧标题链接。 */
 .watchlist-title {
-  font-weight: 700;
-  color: #1f2937;
-  text-decoration: none;
+    /* 成功色（绿色）。 */
+    color: var(--color-success-6);
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 去默认下划线。 */
+    text-decoration: none;
+    /* 紧凑行高。 */
+    line-height: 1.2;
 }
 
-/* 观看条目标题 hover：下划线提示。 */
+/* 看板标题链接悬停下划线。 */
 .watchlist-title:hover {
-  text-decoration: underline;
+    /* 添加下划线。 */
+    text-decoration: underline;
 }
 
-/* 观看条目元信息：纵向小字。 */
+/* 看板卡片元信息区（播放时间、集数等）。 */
 .watchlist-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  color: #6b7280;
-  font-size: 13px;
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 2px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
 }
 
-/* 集数条：展示已看/可看集数。 */
+/* 看板卡片评分星级文本。 */
+.watchlist-stars {
+    /* 左边距分隔。 */
+    margin-left: 6px;
+    /* 默认次级文字色。 */
+    color: var(--color-text-3);
+    /* 小字号。 */
+    font-size: 12px;
+    /* 星号间距。 */
+    letter-spacing: 1px;
+}
+
+/* 高分星级（绿色）。 */
+.watchlist-stars.rating-high {
+    /* 成功色。 */
+    color: #00b42a;
+}
+
+/* 中等星级（黄色）。 */
+.watchlist-stars.rating-medium {
+    /* 警告色。 */
+    color: #f7ba1e;
+}
+
+/* 低分星级（红色）。 */
+.watchlist-stars.rating-low {
+    /* 危险色。 */
+    color: #f53f3f;
+}
+
+/* 中立星级（灰色）。 */
+.watchlist-stars.rating-neutral {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 星级文本内子元素继承颜色。 */
+.watchlist-stars * {
+    /* 继承父元素色。 */
+    color: inherit;
+}
+
+/* 集数条容器（展示所有集数状态）。 */
 .episode-strip {
-  margin: 6px 0;
-  padding: 8px 10px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 6px;
 }
 
-/* 集数条头部：标签与摘要并排。 */
+/* 集数条头部（标题或统计信息）。 */
 .episode-strip-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: #4b5563;
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 两端对齐。 */
+    justify-content: space-between;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 小字号。 */
+    font-size: 12px;
 }
 
-/* 集数条标签：加粗。 */
-.episode-strip-label {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* 集数摘要：浅色提示。 */
-.episode-strip-summary {
-  color: #6b7280;
-}
-
-/* 集数网格：自适应列数。 */
+/* 集数条网格容器。 */
 .episode-strip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
-  gap: 4px;
+    /* 网格布局。 */
+    display: grid;
+    /* 自动填充列，每列最小 28px。 */
+    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+    /* 集数间距。 */
+    gap: 4px;
 }
 
-/* 集数胶囊：小号块状按钮。 */
+/* 单集胶囊样式。 */
 .episode-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 0;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #6b7280;
-  user-select: none;
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 水平居中。 */
+    justify-content: center;
+    /* 内边距。 */
+    padding: 2px 4px;
+    /* 圆角。 */
+    border-radius: 6px;
+    /* 三级背景色。 */
+    background: var(--color-bg-3);
+    /* 边框。 */
+    border: 1px solid var(--color-border-2);
+    /* 小字号。 */
+    font-size: 11px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
 }
 
-/* 激活集数：蓝色高亮。 */
+/* 已看集数胶囊（高亮主题色）。 */
 .episode-pill.active {
-  background: #e5f3ff;
-  border-color: #60a5fa;
-  color: #1d4ed8;
-  font-weight: 600;
+    /* 主题色半透明背景。 */
+    background: rgba(22, 93, 255, 0.12);
+    /* 主题色边框。 */
+    border-color: rgba(22, 93, 255, 0.4);
+    /* 主题色文字。 */
+    color: var(--color-primary-6);
 }
 
-/* 元信息行：提高行距。 */
-.meta-row {
-  line-height: 1.4;
+/* 最新集数胶囊（高亮绿色）。 */
+.episode-pill.latest {
+    /* 成功色半透明背景。 */
+    background: rgba(0, 180, 42, 0.12);
+    /* 成功色边框。 */
+    border-color: rgba(0, 180, 42, 0.4);
+    /* 成功色文字。 */
+    color: #00b42a;
 }
 
-/* 摘要文本：限制高度并省略。 */
-.watchlist-summary {
-  margin: 0;
-  color: #374151;
-  line-height: 1.4;
-  max-height: 3.6em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 观看条目操作区：按钮换行排列。 */
+/* 看板卡片操作按钮区。 */
 .watchlist-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 按钮间距。 */
+    gap: 8px;
+    /* 上边距分隔。 */
+    margin-top: 4px;
 }
 
-/* 观看列表为空提示：浅色文案。 */
-.watchlist-empty {
-  margin: 0;
-  color: #6b7280;
-  padding: 8px 4px;
+/* 搜索面板主容器。 */
+.search-panel {
+    /* 全宽。 */
+    width: 100%;
+    /* 最大宽度。 */
+    max-width: 1400px;
+    /* 最小高度为 0（允许收缩）。 */
+    min-height: 0;
+    /* 最大高度限制。 */
+    max-height: 92vh;
+    /* 超出滚动。 */
+    overflow: auto;
+}
+
+/* 搜索面板卡片样式覆盖。 */
+.search-panel.arco-card {
+    /* 三级背景色。 */
+    background: var(--color-bg-3);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 搜索结果头部（标题与操作按钮）。 */
+.search-result-header {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 两端对齐。 */
+    justify-content: space-between;
+    /* 元素间距。 */
+    gap: 12px;
+}
+
+/* 搜索内联结果容器。 */
+.search-inline-results {
+    /* 上边距分隔。 */
+    margin-top: 12px;
+    /* 内边距。 */
+    padding: 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 10px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 10px;
+}
+
+/* 搜索卡片头部（标题与关闭按钮）。 */
+.search-card-header {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 两端对齐。 */
+    justify-content: space-between;
+    /* 元素间距。 */
+    gap: 12px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+}
+
+/* 搜索控件组容器（输入框+按钮）。 */
+.search-controls {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 14px;
+}
+
+/* 搜索控件行（横向排列）。 */
+.search-row {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 元素间距。 */
+    gap: 8px;
+}
+
+/* 紧凑行（禁止换行）。 */
+.search-row.compact {
+    /* 禁止换行。 */
+    flex-wrap: nowrap;
+    /* 元素间距。 */
+    gap: 8px;
+}
+
+/* 紧凑行内选择器固定宽度。 */
+.search-row.compact .arco-select {
+    /* 最小宽度。 */
+    min-width: 240px;
+    /* 最大宽度。 */
+    max-width: 240px;
+    /* 禁止收缩。 */
+    flex-shrink: 0;
+}
+
+/* 搜索输入框自适应容器。 */
+.search-input-flex {
+    /* 弹性伸缩。 */
+    flex: 1;
+    /* 最小宽度。 */
+    min-width: 240px;
+    /* 最大宽度。 */
+    max-width: 240px;
+}
+
+/* 紧凑行内按钮禁止收缩。 */
+.search-row.compact .arco-btn {
+    /* 禁止收缩。 */
+    flex-shrink: 0;
+}
+
+/* 搜索标签（左侧描述文字）。 */
+.search-label {
+    /* 固定宽度。 */
+    width: 72px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 禁止收缩。 */
+    flex-shrink: 0;
+}
+
+/* 搜索按钮组。 */
+.search-button-group {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 按钮间距。 */
+    gap: 8px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+}
+
+/* 逻辑组合选择器（AND/OR）。 */
+.logic-group {
+    /* 去左边距。 */
+    margin-left: 0;
+}
+
+/* 搜索提示文本。 */
+.search-hint {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 字号。 */
+    font-size: 13px;
+}
+
+/* 头部提示文本。 */
+.header-hint {
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 搜索标签列表（显示当前筛选条件）。 */
+.search-tag-list {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 标签间距。 */
+    gap: 6px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+}
+
+/* 搜索标签行（不换行对齐）。 */
+.search-row.search-tags {
+    /* 禁止换行。 */
+    flex-wrap: nowrap;
+    /* 顶部对齐。 */
+    align-items: flex-start;
+}
+
+/* 标签行内的标签列表占据剩余宽度。 */
+.search-row.search-tags .search-tag-list {
+    /* 占据剩余空间。 */
+    flex: 1;
+    /* 允许文本截断。 */
+    min-width: 0;
+}
+
+/* 筛选条件操作符文本（"AND"、"OR"）。 */
+.term-op {
+    /* 右边距分隔。 */
+    margin-right: 4px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 筛选条件值文本。 */
+.term-value {
+    /* 半粗体突出。 */
+    font-weight: 600;
+}
+
+/* 搜索预览容器。 */
+.search-preview {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 4px;
+    /* 最大宽度。 */
+    max-width: 720px;
+}
+
+/* 搜索打开模态框内容容器。 */
+.search-open-modal {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+    /* 字号。 */
+    font-size: 14px;
+}
+
+/* 搜索模态框信息行。 */
+.search-modal-row {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 允许单词内断行。 */
+    word-break: break-all;
+}
+
+/* 搜索模态框标签（左侧）。 */
+.search-modal-label {
+    /* 最小宽度。 */
+    min-width: 56px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 搜索加载中与错误状态通用样式。 */
+.search-loading,
+.search-error {
+    /* 内边距。 */
+    padding: 12px;
+    /* 圆角。 */
+    border-radius: 6px;
+    /* 字号。 */
+    font-size: 14px;
+}
+
+/* 搜索加载中状态。 */
+.search-loading {
+    /* 填充色背景。 */
+    background: var(--color-fill-2);
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 搜索错误状态。 */
+.search-error {
+    /* 危险色浅背景。 */
+    background: var(--color-danger-1);
+    /* 危险色文字。 */
+    color: var(--color-danger-6);
+    /* 危险色边框。 */
+    border: 1px solid var(--color-danger-2);
+}
+
+/* 搜索预览 iframe 框架。 */
+.search-preview-frame {
+    /* 全宽。 */
+    width: 100%;
+    /* 最小高度。 */
+    min-height: 520px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+}
+
+/* 搜索结果列表容器。 */
+.search-result-list {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 10px;
+    /* 上下内边距。 */
+    padding: 8px 0;
+}
+
+/* 搜索结果单行。 */
+.search-result-row {
+    /* 网格布局。 */
+    display: grid;
+    /* 左列自适应右列自动。 */
+    grid-template-columns: 1fr auto;
+    /* 列间距。 */
+    gap: 12px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 内边距。 */
+    padding: 10px 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+}
+
+/* 搜索结果名称链接。 */
+.sr-name a {
+    /* 主文字色。 */
+    color: var(--color-text-1);
+    /* 半粗体。 */
+    font-weight: 600;
+}
+
+/* 搜索结果名称链接悬停下划线。 */
+.sr-name a:hover {
+    /* 添加下划线。 */
+    text-decoration: underline;
+}
+
+/* 搜索结果元信息行（集数、来源等）。 */
+.sr-meta {
+    /* 上边距分隔。 */
+    margin-top: 4px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 字号。 */
+    font-size: 12px;
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 元素间距。 */
+    gap: 8px;
+}
+
+/* 搜索结果操作链接组。 */
+.sr-links {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 链接间距。 */
+    gap: 10px;
+}
+
+/* 搜索查询语句展示框。 */
+.search-query {
+    /* 内边距。 */
+    padding: 8px 10px;
+    /* 填充色背景。 */
+    background: var(--color-fill-2);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 6px;
+    /* 等宽字体（代码展示）。 */
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    /* 字号。 */
+    font-size: 13px;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+    /* 最小高度。 */
+    min-height: 32px;
+}
+
+/* 别名模态框主体容器。 */
+.alias-modal-body {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 12px;
+}
+
+/* 别名列表标题。 */
+.alias-title {
+    /* 去默认外边距。 */
+    margin: 0;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 别名提示文本。 */
+.alias-hint {
+    /* 去默认外边距。 */
+    margin: 0;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 字号。 */
+    font-size: 13px;
+}
+
+/* 别名列表容器。 */
+.alias-list {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 行列间距。 */
+    gap: 8px 12px;
+}
+
+/* 别名单项胶囊。 */
+.alias-item {
+    /* 内边距。 */
+    padding: 6px 10px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 胶囊形圆角。 */
+    border-radius: 999px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+}
+
+/* 别名单项悬停高亮。 */
+.alias-item:hover {
+    /* 填充色背景。 */
+    background: var(--color-fill-2);
+}
+
+/* 别名模态框操作按钮区。 */
+.alias-actions {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 右对齐。 */
+    justify-content: flex-end;
+    /* 按钮间距。 */
+    gap: 8px;
+}
+
+/* 下载页卡片容器。 */
+.download-card {
+    /* 全宽。 */
+    width: 100%;
+    /* 最大宽度。 */
+    max-width: 1400px;
+    /* 最小高度为 0（允许收缩）。 */
+    min-height: 0;
+    /* 最大高度限制。 */
+    max-height: 92vh;
+    /* 超出滚动。 */
+    overflow: auto;
+}
+
+/* 下载页卡片样式覆盖。 */
+.download-card.arco-card {
+    /* 三级背景色。 */
+    background: var(--color-bg-3);
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+}
+
+/* 下载页空状态提示文本。 */
+.download-empty {
+    /* 去默认外边距。 */
+    margin: 0;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 字号。 */
+    font-size: 14px;
+}
+
+/* 下载任务列表容器。 */
+.download-list {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 任务间距。 */
+    gap: 10px;
+}
+
+/* 下载工具栏。 */
+.download-toolbar {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 下边距分隔。 */
+    margin-bottom: 12px;
+    /* 垂直居中。 */
+    align-items: center;
+}
+
+/* 下载总速度显示区。 */
+.download-total-speed {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 6px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 下载总速度标签文本。 */
+.download-total-label {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 下载工具栏操作按钮组（右对齐）。 */
+.download-toolbar-actions {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 按钮间距。 */
+    gap: 8px;
+    /* 左自动边距（推至右侧）。 */
+    margin-left: auto;
+}
+
+/* 下载任务单行。 */
+.download-row {
+    /* 网格布局。 */
+    display: grid;
+    /* 左列自适应右列自动。 */
+    grid-template-columns: 1fr auto;
+    /* 列间距。 */
+    gap: 12px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 内边距。 */
+    padding: 10px 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+}
+
+/* 下载任务标题。 */
+.download-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+    /* 允许单词内断行。 */
+    word-break: break-all;
+}
+
+/* 下载任务元信息行（大小、速度等）。 */
+.download-meta {
+    /* 上边距分隔。 */
+    margin-top: 6px;
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 元素间距。 */
+    gap: 6px;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 下载进度区域。 */
+.download-progress {
+    /* 上边距分隔。 */
+    margin-top: 8px;
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 6px;
+}
+
+/* 进度文本（速度、剩余时间）。 */
+.progress-text {
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 下载错误提示文本。 */
+.download-error {
+    /* 上边距分隔。 */
+    margin-top: 6px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 危险色文字。 */
+    color: var(--color-danger-6);
+}
+
+/* 通用胶囊样式（标签、路径等）。 */
+.pill {
+    /* 内边距。 */
+    padding: 2px 6px;
+    /* 胶囊形圆角。 */
+    border-radius: 999px;
+    /* 填充色背景。 */
+    background: var(--color-fill-2);
+}
+
+/* 路径胶囊（超长截断）。 */
+.path-pill {
+    /* 最大宽度。 */
+    max-width: 320px;
+    /* 超出隐藏。 */
+    overflow: hidden;
+    /* 省略号。 */
+    text-overflow: ellipsis;
+    /* 禁止换行。 */
+    white-space: nowrap;
+}
+
+/* 下载任务操作按钮组。 */
+.download-actions {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 按钮间距。 */
+    gap: 8px;
+    /* 相对定位锚点。 */
+    position: relative;
+    /* 层级高于背景。 */
+    z-index: 1;
+}
+
+/* 图标按钮（播放、暂停、删除等）。 */
+.icon-button {
+    /* 最小宽度。 */
+    min-width: 24px;
+    /* 左右内边距。 */
+    padding: 0 6px;
+    /* 字号。 */
+    font-size: 14px;
+    /* 行高紧凑。 */
+    line-height: 1;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 禁用状态图标按钮。 */
+.icon-button:disabled {
+    /* 浅灰色。 */
+    color: var(--color-text-4);
+}
+
+/* 图标按钮内 SVG 图标样式。 */
+.icon-button .icon {
+    /* 图标宽度。 */
+    width: 16px;
+    /* 图标高度。 */
+    height: 16px;
+    /* 描边继承当前色。 */
+    stroke: currentColor;
+    /* 无填充。 */
+    fill: none;
+    /* 描边宽度。 */
+    stroke-width: 1.8;
+    /* 线段末端圆角。 */
+    stroke-linecap: round;
+    /* 线段连接圆角。 */
+    stroke-linejoin: round;
+}
+
+/* 图标按钮内多边形图标（填充不描边）。 */
+.icon-button .icon polygon {
+    /* 填充继承当前色。 */
+    fill: currentColor;
+    /* 无描边。 */
+    stroke: none;
+}
+
+/* 轨道列表容器（音频/视频轨道）。 */
+.tracks-list {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 区块间距。 */
+    gap: 12px;
+}
+
+/* 轨道混流设置工具栏。 */
+.tracks-mix-bar {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 12px;
+    /* 下边距分隔。 */
+    padding-bottom: 4px;
+}
+
+/* 轨道混流语言选择行。 */
+.tracks-mix-lang {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 元素间距。 */
+    gap: 12px;
+    /* 上下内边距。 */
+    padding: 8px 0 4px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 混流语言区标签文本。 */
+.tracks-mix-lang-label {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 混流语言单项容器。 */
+.tracks-mix-lang-item {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 内边距。 */
+    padding: 4px 8px;
+    /* 主题色浅背景。 */
+    background: var(--color-primary-1);
+    /* 胶囊形圆角。 */
+    border-radius: 999px;
+    /* 横向书写模式（防止继承）。 */
+    writing-mode: horizontal-tb;
+    /* 禁止换行。 */
+    white-space: nowrap;
+}
+
+/* 混流语言项内选择器宽度。 */
+.tracks-mix-lang-item .arco-select {
+    /* 最小宽度。 */
+    min-width: 120px;
+}
+
+/* 轨道混流错误提示文本。 */
+.tracks-mix-error {
+    /* 字号。 */
+    font-size: 12px;
+    /* 危险色文字。 */
+    color: var(--color-danger-6);
+}
+
+/* 轨道混流成功提示文本。 */
+.tracks-mix-success {
+    /* 字号。 */
+    font-size: 12px;
+    /* 成功色文字。 */
+    color: var(--color-success-6);
+}
+
+/* 轨道区块容器（音频/视频/字幕区块）。 */
+.tracks-section {
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 内边距。 */
+    padding: 12px;
+    /* 次级背景色。 */
+    background: var(--color-bg-2);
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 12px;
+}
+
+/* 轨道区块头部（标题与操作按钮）。 */
+.tracks-header {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 两端对齐。 */
+    justify-content: space-between;
+    /* 元素间距。 */
+    gap: 12px;
+}
+
+/* 轨道区块标题文本。 */
+.tracks-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 轨道区块操作按钮组。 */
+.tracks-actions {
+    /* 内联 Flex 布局。 */
+    display: inline-flex;
+    /* 按钮间距。 */
+    gap: 8px;
+}
+
+/* 轨道区块主体内容区。 */
+.tracks-body {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 12px;
+}
+
+/* 轨道文件列表容器。 */
+.tracks-files {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 文件间距。 */
+    gap: 8px;
+}
+
+/* 轨道单个文件行（网格布局：名称、大小、路径）。 */
+.tracks-file {
+    /* 网格布局。 */
+    display: grid;
+    /* 三列：140px、96px、自适应。 */
+    grid-template-columns: 140px 96px 1fr;
+    /* 列间距。 */
+    gap: 8px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 轨道文件名文本。 */
+.tracks-file-name {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 轨道文件路径（超长截断）。 */
+.tracks-file-path {
+    /* 超出隐藏。 */
+    overflow: hidden;
+    /* 省略号。 */
+    text-overflow: ellipsis;
+    /* 禁止换行。 */
+    white-space: nowrap;
+}
+
+/* 轨道文件大小（右对齐）。 */
+.tracks-file-size {
+    /* 右对齐文本。 */
+    text-align: right;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 轨道进度条容器。 */
+.tracks-progress {
+    /* 上下内边距。 */
+    padding: 4px 0;
+}
+
+/* 轨道信息容器（解析后的轨道详细信息）。 */
+.tracks-info {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+}
+
+/* 轨道信息分组（单个文件的轨道信息）。 */
+.tracks-info-group {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+    /* 内边距。 */
+    padding: 8px 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 一级背景色（浅于父容器）。 */
+    background: var(--color-bg-1);
+}
+
+/* 轨道信息文件名标题。 */
+.tracks-info-file {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 字号。 */
+    font-size: 12px;
+}
+
+/* 轨道信息单行（音频/视频/字幕详细参数）。 */
+.tracks-info-row {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 元素间距。 */
+    gap: 8px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 轨道信息名称（轨道类型/语言）。 */
+.tracks-info-name {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 轨道信息元数据胶囊（编码、比特率等）。 */
+.tracks-info-meta {
+    /* 内边距。 */
+    padding: 4px 8px;
+    /* 胶囊形圆角。 */
+    border-radius: 999px;
+    /* 填充色背景。 */
+    background: var(--color-fill-2);
+}
+
+/* 轨道解析错误提示文本。 */
+.tracks-error {
+    /* 字号。 */
+    font-size: 12px;
+    /* 危险色文字。 */
+    color: var(--color-danger-6);
+}
+
+/* 混流任务队列列表容器。 */
+.mix-queue-list {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 任务间距。 */
+    gap: 8px;
+}
+
+/* 混流任务队列单行。 */
+.mix-queue-row {
+    /* 网格布局。 */
+    display: grid;
+    /* 四列：52px、140px、自适应、80px。 */
+    grid-template-columns: 52px 140px 1fr 80px;
+    /* 列间距。 */
+    gap: 12px;
+    /* 垂直居中。 */
+    align-items: center;
+    /* 内边距。 */
+    padding: 8px 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 一级背景色。 */
+    background: var(--color-bg-1);
+    /* 字号。 */
+    font-size: 12px;
+    /* 鼠标指针。 */
+    cursor: pointer;
+    /* 过渡动画（边框色和阴影）。 */
+    transition:
+        border-color 0.12s ease,
+        box-shadow 0.12s ease;
+}
+
+/* 混流任务队列单行悬停高亮。 */
+.mix-queue-row:hover {
+    /* 主题色边框。 */
+    border-color: var(--color-primary-4);
+    /* 阴影效果。 */
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.12);
+}
+
+/* 混流任务 ID 列。 */
+.mix-queue-id {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 混流任务时间列。 */
+.mix-queue-time {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 混流任务输出路径列（超长截断）。 */
+.mix-queue-output {
+    /* 超出隐藏。 */
+    overflow: hidden;
+    /* 省略号。 */
+    text-overflow: ellipsis;
+    /* 禁止换行。 */
+    white-space: nowrap;
+}
+
+/* 混流任务消息行（展开显示详细错误）。 */
+.mix-queue-message-row {
+    /* 跨全列。 */
+    grid-column: 1 / -1;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+    /* 填充色背景。 */
+    background: var(--color-fill-1);
+    /* 圆角。 */
+    border-radius: 6px;
+    /* 内边距。 */
+    padding: 4px 8px;
+    /* 行高。 */
+    line-height: 1.4;
+    /* 允许单词内断行。 */
+    word-break: break-all;
+}
+
+/* 混流任务状态列（右对齐）。 */
+.mix-queue-status {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 右对齐自身。 */
+    justify-self: end;
+}
+
+/* 队列中状态（灰色）。 */
+.mix-queue-status[data-status="queued"] {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* 运行中状态（蓝色）。 */
+.mix-queue-status[data-status="running"] {
+    /* 主题色。 */
+    color: var(--color-primary-6);
+}
+
+/* 成功状态（绿色）。 */
+.mix-queue-status[data-status="success"] {
+    /* 成功色。 */
+    color: var(--color-success-6);
+}
+
+/* 失败状态（红色）。 */
+.mix-queue-status[data-status="failed"] {
+    /* 危险色。 */
+    color: var(--color-danger-6);
+}
+
+/* 混流任务详情容器。 */
+.mix-queue-detail {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 10px;
+    /* 字号。 */
+    font-size: 12px;
+    /* 次级文字色。 */
+    color: var(--color-text-2);
+}
+
+/* 混流任务详情单行（标签-值对）。 */
+.mix-queue-detail-row {
+    /* 网格布局。 */
+    display: grid;
+    /* 两列：72px、自适应。 */
+    grid-template-columns: 72px 1fr;
+    /* 列间距。 */
+    gap: 12px;
+    /* 垂直居中。 */
+    align-items: center;
+}
+
+/* 混流任务详情标签（左列）。 */
+.mix-queue-detail-label {
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+    /* 半粗体。 */
+    font-weight: 600;
+}
+
+/* 混流任务详情值（右列，超长截断）。 */
+.mix-queue-detail-value {
+    /* 超出隐藏。 */
+    overflow: hidden;
+    /* 省略号。 */
+    text-overflow: ellipsis;
+    /* 禁止换行。 */
+    white-space: nowrap;
+}
+
+/* 混流任务详情区块标题。 */
+.mix-queue-detail-section {
+    /* 上边距分隔。 */
+    margin-top: 4px;
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* 混流任务详情区块容器（输入/输出文件列表）。 */
+.mix-queue-detail-block {
+    /* 内边距。 */
+    padding: 8px 12px;
+    /* 边框。 */
+    border: 1px solid var(--color-border-3);
+    /* 圆角。 */
+    border-radius: 8px;
+    /* 填充色背景。 */
+    background: var(--color-fill-1);
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+}
+
+/* 详情链接列表内的链接（去默认下划线）。 */
+.detail-link-list .detail-link {
+    /* 去默认下划线。 */
+    text-decoration: none;
+}
+
+/* 详情链接列表内的链接悬停下划线。 */
+.detail-link-list .detail-link:hover {
+    /* 添加下划线。 */
+    text-decoration: underline;
+}
+
+/* Staff 模态框主体容器。 */
+.staff-modal-body {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 12px;
+}
+
+/* Staff 模态框标题。 */
+.staff-modal-title {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 主文字色。 */
+    color: var(--color-text-1);
+}
+
+/* Staff 分组列表容器。 */
+.staff-group-list {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 分组间距。 */
+    gap: 12px;
+}
+
+/* Staff 单个分组（如"监督"、"脚本"等）。 */
+.staff-group {
+    /* 纵向 Flex 布局。 */
+    display: flex;
+    /* 纵向排列。 */
+    flex-direction: column;
+    /* 行间距。 */
+    gap: 8px;
+}
+
+/* Staff 分组角色标题（"监督"、"原作"等）。 */
+.staff-role {
+    /* 半粗体。 */
+    font-weight: 600;
+    /* 次级文字色。 */
+    color: var(--color-text-3);
+}
+
+/* Staff 人员列表（横向排列）。 */
+.staff-people {
+    /* 横向 Flex 布局。 */
+    display: flex;
+    /* 允许换行。 */
+    flex-wrap: wrap;
+    /* 行列间距。 */
+    gap: 6px 12px;
+}
+
+/* Staff 人员链接（强制绿色）。 */
+.staff-link {
+    /* 成功色强制覆盖。 */
+    color: var(--color-success-6) !important;
+    /* 去默认下划线。 */
+    text-decoration: none;
+}
+
+/* 详情链接与 Staff 链接的 Arco Link 组件颜色覆盖（多选择器兼容）。 */
+.detail-link .arco-link,
+.staff-link .arco-link,
+.arco-link.detail-link,
+.arco-link.staff-link {
+    /* 成功色强制覆盖。 */
+    color: var(--color-success-6) !important;
+}
+
+/* 详情链接与 Staff 链接内文本颜色覆盖（深层穿透）。 */
+.detail-link .arco-link > span,
+.staff-link .arco-link > span,
+.arco-link.detail-link > span,
+.arco-link.staff-link > span {
+    /* 成功色强制覆盖。 */
+    color: var(--color-success-6) !important;
+}
+
+/* Staff 链接悬停下划线。 */
+.staff-link:hover {
+    /* 添加下划线。 */
+    text-decoration: underline;
 }

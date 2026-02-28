@@ -1,12 +1,11 @@
-/*
-   外部链接相关功能：
-   目前只提供“打开链接”的简单命令。
-   前端调用这个命令时，会在系统默认浏览器中打开指定 URL。
-*/
-
-// 让前端可调用的命令：打开外部链接。
-// 成功返回 Ok(())，失败返回错误字符串。
+/* 文件：mod.rs | 用途：提供打开外部链接的命令 | 关键对象：open_external_link */
+// 本行目的：标记为可被 Tauri 调用的命令。
 #[tauri::command]
+/// 函数：open_external_link | 输入：外部链接 URL | 输出：空结果或错误 | 可能失败：系统无法打开链接
+// 本行目的：打开外部链接并返回结果。
 pub fn open_external_link(url: String) -> Result<(), String> {
-  open::that(url).map_err(|err| format!("打开外部链接失败: {err}"))
+    // 变量：url | 含义：待打开的外部链接 | 类型：String | 作用域：open_external_link
+    // 本行目的：调用系统打开链接并转换错误信息。
+    open::that(url).map_err(|err| format!("打开外部链接失败: {err}"))
+// 本行目的：结束命令函数。
 }

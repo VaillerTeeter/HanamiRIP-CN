@@ -1,166 +1,84 @@
-
 # 架构说明
 
-## 总览
+本文档描述 HanamiRIP-CN 的代码组织、运行时边界和关键数据流。
 
-项目采用 **Monorepo** 结构：
+## 1. 总体架构
 
-- `.github/`：工程规范与注释说明
-- `apps/desktop`：桌面应用（Tauri + Vue）
-- `crates/baidu_verify`：百度翻译密钥校验动态库
-- `docs/`：文档
-- `scripts/`：开发脚本
-- `dist/`：构建产物输出
+项目采用 Monorepo 结构，桌面应用由两部分组成：
 
-## 运行时结构
+- 前端：`apps/desktop/frontend`（Vue 3 + TypeScript + Arco）
+- 后端：`apps/desktop/backend`（Rust + Tauri Command）
 
-- 前端（Vue + Naive UI）通过 Tauri JS API 调用后端命令。
-- 后端（Rust/Tauri）负责：
-	- Bangumi API 数据聚合
-	- 本地追番数据保存
-	- torrent 下载与状态查询
-	- 媒体轨道解析与混流
-	- 外部链接打开
-- 工具链：`ffprobe/ffmpeg/mkvmerge/mkvinfo` 打包进应用资源目录。
+前端通过 `@tauri-apps/api/core` 的 `invoke()` 调用后端命令，后端负责：
+- 外部 API 聚合（Bangumi）
+- 本地数据持久化（追番状态、下载任务）
+- 系统能力（文件、对话框、外链、窗口）
+- 外部工具调用（FFmpeg / MKVToolNix）
 
-## 项目树（非 .gitignore 忽略的所有文件）
-```bash
-.
-├─ .github/
-│  └─ instructions/ - 注释与格式规范
-│     ├─ css-comments.instructions.md - CSS 注释规范
-│     ├─ html-comments.instructions.md - HTML 注释规范
-│     ├─ json-comments.instructions.md - JSON 注释规范
-│     ├─ ps1-comments.instructions.md - PowerShell 注释规范
-│     ├─ rust-comments.instructions.md - Rust 注释规范
-│     ├─ toml-comments.instructions.md - TOML 注释规范
-│     ├─ ts-comments.instructions.md - TypeScript 注释规范
-│     └─ vue-comments.instructions.md - Vue 注释规范
-├─ .gitignore - 代码忽略规则
-├─ .node-version - Node.js 版本约束
-├─ .vscode/
-│  └─ settings.json - 工作区编辑器配置
-├─ apps/
-│  └─ desktop/
-│     ├─ backend/
-│     │  ├─ build.rs - Tauri 构建脚本（资源打包）
-│     │  ├─ Cargo.lock - Rust 依赖锁定
-│     │  ├─ Cargo.toml - 后端依赖与编译配置
-│     │  ├─ tauri.conf.json - Tauri 应用配置
-│     │  └─ src/
-│     │     ├─ main.rs - Tauri 入口与命令注册
-│     │     └─ services/
-│     │        ├─ mod.rs - 服务模块聚合
-│     │        ├─ bangumi/
-│     │        │  ├─ api.rs - Bangumi API 聚合逻辑
-│     │        │  ├─ commands.rs - Tauri 命令定义
-│     │        │  ├─ filters.rs - 标签/过滤辅助逻辑
-│     │        │  ├─ mod.rs - bangumi 模块入口
-│     │        │  ├─ models.rs - Bangumi 数据模型
-│     │        │  └─ translate.rs - 百度翻译与校验库加载
-│     │        ├─ external/
-│     │        │  └─ mod.rs - 外部链接打开命令
-│     │        ├─ media/
-│     │        │  └─ mod.rs - 轨道解析/混流逻辑
-│     │        ├─ storage/
-│     │        │  └─ mod.rs - 本地追番存储
-│     │        └─ torrent/
-│     │           └─ mod.rs - Torrent 下载逻辑
-│     ├─ frontend/
-│     │  ├─ App.vue - 应用根组件
-│     │  ├─ env.d.ts - Vite 类型声明
-│     │  ├─ index.html - 前端入口 HTML
-│     │  ├─ main.ts - Vue 启动入口
-│     │  ├─ style.css - 全局样式
-│     │  ├─ modules/
-│     │  │  ├─ download/
-│     │  │  │  ├─ composables/useDownloadPage.ts - 下载页逻辑
-│     │  │  │  ├─ pages/DownloadPage.vue - 下载页 UI
-│     │  │  │  └─ types/download.ts - 下载类型定义
-│     │  │  ├─ query/
-│     │  │  │  ├─ components/StaffModal.vue - 人员弹窗组件
-│     │  │  │  ├─ composables/useQueryPage.ts - 查询页逻辑
-│     │  │  │  └─ pages/QueryPage.vue - 查询页 UI
-│     │  │  ├─ search/
-│     │  │  │  ├─ components/AliasModal.vue - 别名选择弹窗
-│     │  │  │  ├─ composables/useSearchPage.ts - 搜索页逻辑
-│     │  │  │  ├─ pages/SearchPage.vue - 搜索页 UI
-│     │  │  │  └─ types/search.ts - 搜索类型定义
-│     │  │  ├─ tracking/
-│     │  │  │  ├─ composables/useTracking.ts - 追番状态逻辑
-│     │  │  │  ├─ pages/BacklogPage.vue - 补番页 UI
-│     │  │  │  ├─ pages/FinishedPage.vue - 完结页 UI
-│     │  │  │  ├─ pages/WatchingPage.vue - 正在追页 UI
-│     │  │  │  └─ types/
-│     │  │  │     ├─ anime.ts - 番剧类型定义
-│     │  │  │     └─ tracking.ts - 追番状态类型定义
-│     │  │  └─ tracks/
-│     │  │     ├─ components/MixQueueDetailModal.vue - 混流队列详情弹窗
-│     │  │     ├─ composables/useTracksPage.ts - 轨道混流逻辑
-│     │  │     ├─ pages/TracksPage.vue - 混流页 UI
-│     │  │     └─ types/tracks.ts - 轨道类型定义
-│     │  └─ shared/
-│     │     ├─ components/AppTitlebar.vue - 窗口标题栏
-│     │     ├─ composables/useExternalLink.ts - 外链打开封装
-│     │     ├─ composables/useWindowControls.ts - 窗口控制封装
-│     │     ├─ types/page.ts - 页面类型定义
-│     │     └─ utils/
-│     │        ├─ format.ts - 格式化工具
-│     │        └─ tauri.ts - Tauri 运行环境判断
-│     ├─ public/
-│     │  ├─ fonts/ - 字体资源
-│     │  │  ├─ NotoSansJP-Regular.ttf - 日文字体常规
-│     │  │  ├─ NotoSansJP-SemiBold.ttf - 日文字体加粗
-│     │  │  ├─ NotoSansKR-Regular.ttf - 韩文字体常规
-│     │  │  ├─ NotoSansKR-SemiBold.ttf - 韩文字体加粗
-│     │  │  ├─ NotoSansSC-Regular.ttf - 简中文字体常规
-│     │  │  ├─ NotoSansSC-SemiBold.ttf - 简中文字体加粗
-│     │  │  ├─ NotoSansTC-Regular.ttf - 繁中文字体常规
-│     │  │  └─ NotoSansTC-SemiBold.ttf - 繁中文字体加粗
-│     │  ├─ icons/ - 应用图标资源
-│     │  │  ├─ icon.ico - Windows 图标
-│     │  │  ├─ icon.png - PNG 图标
-│     │  │  └─ icon.svg - SVG 图标
-│     │  └─ tools/ - 内置工具
-│     │     ├─ ffmpeg.exe - 媒体处理
-│     │     ├─ ffprobe.exe - 媒体信息分析
-│     │     ├─ mkvinfo.exe - MKV 信息分析
-│     │     └─ mkvmerge.exe - MKV 混流
-│     └─ vite.config.ts - Vite 配置
-├─ crates/
-│  └─ baidu_verify/
-│     ├─ Cargo.lock - 动态库依赖锁定
-│     ├─ Cargo.toml - 动态库编译配置
-│     └─ src/
-│        └─ lib.rs - 百度翻译密钥导出
-├─ dist/
-│  └─ baidu_verify/
-│     └─ windows/
-│        └─ baidu_verify.dll - 构建后的动态库
-├─ docs/
-│  ├─ API.md - API 文档
-│  ├─ ARCHITECTURE.md - 架构说明
-│  └─ DEVELOPMENT.md - 开发指南
-├─ LICENSE - 许可证
-├─ package.json - Node 脚本与依赖
-├─ README.md - 项目说明
-├─ scripts/
-│  ├─ banner.ps1 - 命令行 banner
-│  ├─ clean.js - 清理脚本
-│  └─ setup-env.ps1 - Windows 环境初始化脚本
-└─ yarn.lock - 依赖锁定
+## 2. 目录与职责
+
+```text
+apps/desktop/backend/src/
+├─ main.rs                 # Tauri 启动与命令注册
+└─ services/
+   ├─ bangumi/             # Bangumi 数据与翻译
+   ├─ torrent/             # Torrent 下载任务生命周期
+   ├─ media/               # 轨道解析与混流
+   ├─ storage/             # 追番本地存储
+   └─ external/            # 外链打开
+
+apps/desktop/frontend/
+├─ modules/
+│  ├─ query/               # 番剧详情查询
+│  ├─ search/              # 搜索聚合
+│  ├─ tracking/            # 追番状态管理
+│  ├─ download/            # 下载任务页
+│  └─ tracks/              # 混流页
+└─ shared/
+   ├─ components/          # 通用组件（含标题栏）
+   ├─ composables/         # 通用逻辑
+   ├─ i18n/                # 文案与国际化
+   └─ utils/               # 工具函数
 ```
 
-## 模块说明
+## 3. 运行时数据流
 
-- `apps/desktop/backend/src/services/bangumi`：Bangumi 数据聚合与翻译
-- `apps/desktop/backend/src/services/media`：轨道解析/混流
-- `apps/desktop/backend/src/services/torrent`：下载管理
-- `apps/desktop/backend/src/services/storage`：本地追番数据存储
-- `apps/desktop/backend/src/services/external`：外链打开
-- `apps/desktop/frontend/modules/*`：按业务模块拆分的 UI 逻辑
-- `apps/desktop/frontend/shared/*`：复用组件/工具
+### 3.1 番剧查询流
 
-## 更新记录
-- 2026-02-06：初始第一版。
+1. 前端模块发起 `invoke("get_season_subjects" | "get_subject_*")`。
+2. 后端 `services/bangumi` 请求 Bangumi API 并整理模型。
+3. 可选调用百度翻译逻辑生成中文简介。
+4. 返回 JSON 给前端渲染。
 
+### 3.2 下载任务流
+
+1. 前端调用 `get_torrent_metadata` 获取种子基础信息。
+2. 前端确认输出路径后调用 `start_torrent_download`。
+3. 后端创建 `.downloading` 临时目录和占位文件，落盘任务记录。
+4. 前端轮询 `get_torrent_status` 更新进度。
+5. 完成后调用 `finalize_torrent_download` 移动产物并清理临时目录。
+
+### 3.3 轨道混流流
+
+1. 前端调用 `parse_media_tracks(path, kind)` 拉取轨道。
+2. 用户选择轨道后调用 `mix_media_tracks(inputs, output_path)`。
+3. 后端调用 `mkvmerge` 执行混流，返回输出路径。
+
+## 4. 状态与持久化
+
+- 追番数据：`services/storage` 以 JSON 文件持久化。
+- 下载任务：`services/torrent` 维护任务文件，支持恢复与清理。
+- 应用数据目录：由 `main.rs` 在启动时保证可用（含 `user-data` 链接处理）。
+
+## 5. 安全与权限边界
+
+- 前端不能直接访问系统 API，必须经 Tauri command。
+- 能力权限由 `tauri.conf.json` 的 `app.security.capabilities` 显式声明。
+- 当前 `csp: null` 更偏开发友好，发布阶段可视需求收紧。
+
+## 6. 构建与发布链路
+
+- 前端构建：Vite 输出到 `build/frontend`
+- 后端构建：Cargo 输出到 `build/tauri-target`
+- 打包目标：NSIS（x64/x86）
+- 发布整理：`package:windows:*` 脚本复制到 `dist/windows`

@@ -1,15 +1,11 @@
-/*
-	服务模块入口：
-	在这里统一导出各个功能模块，供 main.rs 注册命令时使用。
-*/
-
-// Bangumi 相关功能（条目、季节、翻译等）。
+/* 文件：mod.rs | 用途：汇总暴露后端服务模块 | 关键对象：bangumi、external、media、storage、torrent */
+// 本行目的：公开 bangumi 服务模块。
 pub mod bangumi;
-// 打开外部链接的能力。
+// 本行目的：公开外部链接服务模块。
 pub mod external;
-// 媒体轨道解析与混流。
+// 本行目的：公开媒体处理服务模块。
 pub mod media;
-// 本地追番数据存储。
+// 本行目的：公开本地存储服务模块。
 pub mod storage;
-// 种子下载相关功能。
+// 本行目的：公开种子下载服务模块。
 pub mod torrent;

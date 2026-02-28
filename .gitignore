@@ -3,3 +3,5 @@ build/baidu_verify-build/
 apps/desktop/backend/gen/
 build/tauri-target/
 build/frontend/
+apps/desktop/public/tools/ffmpeg.exe
+apps/desktop/public/tools/ffprobe.exe
