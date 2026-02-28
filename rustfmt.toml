@@ -1,0 +1,142 @@
+﻿# ========================================================
+# Rust Nightly rustfmt 完整可用配置
+# 文档：https://rust-lang.github.io/rustfmt/
+# 已验证兼容 rustfmt 1.8.0-nightly (2026-02-13)
+# ========================================================
+# rustfmt.exe xxx.rs
+# ========================================================
+
+# ==================== 版本与稳定性 ====================
+
+# 启用不稳定特性（当前 nightly 版本）
+unstable_features = true
+
+# 目标 Rust 版本
+edition = "2021"
+
+# ==================== 行长与缩进 ====================
+
+# 最大行长度限制
+max_width = 150
+
+# 缩进宽度（空格数）
+tab_spaces = 4
+
+# 使用制表符而不是空格（false = 使用空格）
+hard_tabs = false
+
+# 注释行宽限制
+comment_width = 100
+
+# ==================== 函数签名格式化 ====================
+
+# 函数参数布局：Tall = 每个参数单独一行
+fn_params_layout = "Tall"
+
+# 函数调用的参数布局：Visual = 与开括号对齐
+fn_call_width = 120
+
+# 函数签名是否保持单行
+fn_single_line = false
+
+# 强制多行块（长函数签名）
+force_multiline_blocks = true
+
+# ==================== 结构体与枚举 ====================
+
+# 结构体初始化是否强制单行
+struct_lit_single_line = false
+
+# 结构体字段宽度限制
+struct_lit_width = 120
+
+# 使用字段初始化简写
+use_field_init_shorthand = true
+
+# 使用 try 简写符
+use_try_shorthand = true
+
+# ==================== 导入格式化 ====================
+
+# 导入缩进方式：Block = 块风格
+imports_indent = "Block"
+
+# 导入排列顺序：Mixed = 混合排序
+imports_layout = "Mixed"
+
+# 导入粒度：Item = 每个项目单独一行
+imports_granularity = "Item"
+
+# 自动重新排列导入
+reorder_imports = true
+
+# 自动重新排列模块
+reorder_modules = true
+
+# ==================== 注释格式化 ====================
+
+# 自动换行注释
+wrap_comments = true
+
+# 自动规范化注释格式
+normalize_comments = true
+
+# 在文档注释中格式化代码块
+format_code_in_doc_comments = false
+
+# 在宏中自动换行注释
+format_macro_bodies = true
+
+# ==================== 空白与间距 ====================
+
+# 范围操作符周围的空白（如 1..10）
+spaces_around_ranges = true
+
+# 冒号前是否有空白
+space_before_colon = false
+
+# 冒号后是否有空白
+space_after_colon = true
+
+# ==================== 宏与属性 ====================
+
+# 格式化宏匹配器
+format_macro_matchers = true
+
+# ==================== 尾逗号处理 ====================
+
+# 尾逗号处理策略：Vertical = 多行时添加
+trailing_comma = "Vertical"
+
+# 匹配块中的尾逗号
+match_block_trailing_comma = false
+
+# ==================== 空行管理 ====================
+
+# 空行下界（最少保留）
+blank_lines_lower_bound = 0
+
+# 空行上界（最多保留）
+blank_lines_upper_bound = 1
+
+# ==================== 字符串处理 ====================
+
+# 格式化字符串字面量
+format_strings = true
+
+# ==================== 其他格式化选项 ====================
+
+# 合并派生属性
+merge_derives = true
+
+# match 表达式中是否使用块
+match_arm_blocks = true
+
+# 条件分支的标点符号密度
+type_punctuation_density = "Wide"
+
+# 换行符风格（Auto = 自动检测）
+newline_style = "Auto"
+
+# 启用更激进的换行（版本控制友好）
+use_small_heuristics = "Off"

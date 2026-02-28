@@ -1,13 +1,16 @@
-# 这是用于生成动态库的 crate 配置。
+# 文件：Cargo.toml | 用途：定义 baidu_verify 动态库构建元信息 | 关键字段：package.name、package.edition、lib.crate-type
+# 说明：本文件无函数/变量（不适用）。
+
+# 字段路径：[package] | 含义：Rust 包基础元信息分组 | 类型：Table | 作用域：整个 crate 构建流程
 [package]
-# crate 名称（用于依赖引用）。
+# 字段路径：package.name | 含义：crate 名称与产物命名基础 | 类型：String | 作用域：编译、发布与依赖解析
 name = "baidu_verify"
-# 版本号（语义化版本）。
+# 字段路径：package.version | 含义：当前 crate 语义化版本号 | 类型：String | 作用域：包管理与版本追踪
 version = "0.1.0"
-# Rust edition 版本。
+# 字段路径：package.edition | 含义：启用 Rust 2021 语言版本特性 | 类型：String | 作用域：编译器语义与可用语法
 edition = "2021"
 
-# 库类型配置：指定生成 cdylib 以供外部程序/动态加载使用。
+# 字段路径：[lib] | 含义：库目标产物配置分组 | 类型：Table | 作用域：库目标编译行为
 [lib]
-# cdylib 会生成 C ABI 兼容的动态库（.dll/.so/.dylib）。
+# 字段路径：lib.crate-type | 含义：声明输出为 C 可加载动态库 | 类型：Array<String> | 作用域：FFI 集成与打包产物
 crate-type = ["cdylib"]

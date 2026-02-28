@@ -1,55 +1,55 @@
-# 这是 Rust 包的基础信息区（package 表）。
-# 这里的配置会影响 crate 的名称、版本、作者等元信息。
+# 文件：Cargo.toml | 用途：Rust/Tauri 后端依赖与构建配置清单，本文件无函数/变量（不适用） | 关键字段：[package] [build-dependencies] [dependencies] [features]
+
+# [package] | 含义：包元信息表，定义 crate 的名称/版本/作者/编译版本等 | 类型：table | 作用域：编译与发布元数据
 [package]
-# 包名：最终会体现在编译产物和依赖引用中。
+# package.name | 含义：crate 名称，用于 Cargo 识别与依赖引用 | 类型：string | 作用域：编译/依赖解析
 name = "hanamirip-cn"
-# 版本号：使用语义化版本（major.minor.patch）。
+# package.version | 含义：语义化版本号（主.次.修） | 类型：string | 作用域：发布/依赖锁定
 version = "0.1.0"
-# 描述信息：用于说明项目用途（发布/文档展示）。
+# package.description | 含义：包描述信息，用于发布与说明 | 类型：string | 作用域：元数据展示
 description = "Tauri + Vite + Vue + NaiveUI template"
-# 作者列表：可用于发布信息展示。
+# package.authors | 含义：作者列表，用于发布说明 | 类型：array<string> | 作用域：元数据展示
 authors = ["you"]
-# Rust 语言版本（edition），影响语法与编译行为。
+# package.edition | 含义：Rust 版次；2021 表示启用 Rust 2021 语法与标准行为 | 类型：string | 作用域：编译器语义
 edition = "2021"
 
-# 构建脚本依赖（build-dependencies）：
-# 仅在 build.rs 运行时需要，不会进入最终运行时依赖。
+# [build-dependencies] | 含义：构建脚本专用依赖，仅在 build.rs 阶段使用 | 类型：table | 作用域：构建期
 [build-dependencies]
-# tauri-build 用于在构建阶段生成 Tauri 所需资源。
+# build-dependencies.tauri-build | 含义：Tauri 构建辅助库；生成/校验配置，配合 build.rs 使用 | 类型：inline-table | 作用域：构建期
 tauri-build = { version = "2.5.5", features = [] }
 
-# 运行时依赖（dependencies）：实际编译进程序的库。
+# [dependencies] | 含义：运行时依赖表，应用启动与运行所需库 | 类型：table | 作用域：运行期与编译期
 [dependencies]
-# 时间处理库（此处只启用 clock，避免引入过多功能）。
+# dependencies.chrono | 含义：日期/时间处理库；关闭默认特性以减小体积，只启用系统时钟 | 类型：inline-table | 作用域：运行期
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# 动态库加载（用于百度翻译密钥读取）。
+# dependencies.libloading | 含义：动态库加载支持，运行时加载本地库/插件 | 类型：string | 作用域：运行期
 libloading = "0.8"
-# 线程安全的惰性初始化。
+# dependencies.once_cell | 含义：惰性初始化与全局单例工具 | 类型：string | 作用域：运行期
 once_cell = "1"
-# HTTP 客户端：启用 TLS 与常见压缩，以及 JSON 解析。
+# dependencies.reqwest | 含义：HTTP 客户端；启用 rustls TLS 与多种压缩和 JSON 支持 | 类型：inline-table | 作用域：运行期
 reqwest = { version = "0.12", features = ["rustls-tls", "gzip", "brotli", "deflate", "json"] }
-# 序列化/反序列化基础库。
+# dependencies.serde | 含义：序列化/反序列化框架；启用 derive 简化结构体标注 | 类型：inline-table | 作用域：运行期/编译期
 serde = { version = "1.0", features = ["derive"] }
-# JSON 解析库。
+# dependencies.serde_json | 含义：JSON 序列化支持，配合 serde 使用 | 类型：string | 作用域：运行期
 serde_json = "1.0"
-# 打开外部链接（调用系统默认浏览器）。
+# dependencies.open | 含义：跨平台打开文件/URL 的工具库 | 类型：string | 作用域：运行期
 open = "5"
-# BT 下载引擎。
+# dependencies.librqbit | 含义：BT/RQBit 相关库，提供下载/种子能力 | 类型：string | 作用域：运行期
 librqbit = "8.1.1"
-# 异步运行时与并发基础设施。
+# dependencies.tokio | 含义：异步运行时；启用同步原语、运行时、宏与进程管理 | 类型：inline-table | 作用域：运行期
 tokio = { version = "1", features = ["sync", "rt", "macros", "process"] }
-# Tauri 框架核心。
+# dependencies.tauri | 含义：Tauri 核心运行库；features 为空表示使用默认最小能力 | 类型：inline-table | 作用域：运行期
 tauri = { version = "2.5.5", features = [] }
-# Tauri 插件：对话框。
+# dependencies.tauri-plugin-dialog | 含义：系统对话框插件（打开/保存/提示） | 类型：string | 作用域：运行期
 tauri-plugin-dialog = "2.3.1"
-# Tauri 插件：shell 调用。
+# dependencies.tauri-plugin-shell | 含义：系统 shell 调用插件，用于打开外部命令/程序 | 类型：string | 作用域：运行期
 tauri-plugin-shell = "2.3.5"
-# Tauri 插件：文件系统访问。
+# dependencies.tauri-plugin-fs | 含义：文件系统插件，读写/目录操作能力 | 类型：string | 作用域：运行期
 tauri-plugin-fs = "2.2.1"
-# URL 解析工具。
+# dependencies.url | 含义：URL 解析与构建工具库 | 类型：string | 作用域：运行期
 url = "2"
 
-# 特性开关（features）：用于按需启用功能。
+# [features] | 含义：编译特性开关表，用于条件编译 | 类型：table | 作用域：编译期
 [features]
-# 自定义协议：让 Tauri 支持自定义资源加载协议。
+# features.custom-protocol | 含义：启用自定义协议特性，依赖 tauri/custom-protocol | 类型：array<string> | 作用域：编译期
 custom-protocol = ["tauri/custom-protocol"]

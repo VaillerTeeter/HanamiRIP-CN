@@ -1,91 +1,104 @@
-/**
- * 单月番剧条目（来自后端季节接口）。
- */
+/** 文件：anime.ts | 用途：定义追踪模块中动画条目、制作人员与季度数据的类型契约 | 关键对象：MonthAnime, StaffPerson, StaffGroup, CharacterLink, SeasonMonthData, SeasonResponse */
+/** 类型：MonthAnime | 用途：描述月度动画条目的完整信息结构 | 字段：基础信息、统计信息、翻译状态与展示信息 */
+// 本行目的：导出月度动画条目接口。
 export interface MonthAnime {
-  // 条目 ID。
-  id: number;
-  // 原始名称。
-  name: string;
-  // 中文名称（可能为空）。
-  nameCn?: string;
-  // 其他别名（可选）。
-  alias?: string;
-  // 原作来源（漫画/小说等）。
-  origin?: string;
-  // 已播出集数。
-  airedCount?: number;
-  // 总集数。
-  totalCount?: number;
-  // 中文简介。
-  summaryCn?: string;
-  // 是否使用翻译得到的简介。
-  summaryTranslated?: boolean;
-  // 翻译是否失败（用于 UI 提示）。
-  summaryTranslateFailed?: boolean;
-  // 类型标签。
-  types?: string[];
-  // 地区标签。
-  regions?: string[];
-  // 受众标签。
-  audiences?: string[];
-  // 封面图片 URL。
-  image: string;
-  // 首播日期。
-  date?: string;
-  // 评分。
-  rating?: number | null;
-  // 原始简介。
-  summary?: string;
-  // 条目链接。
-  url?: string;
-  // 所属月份（用于筛选）。
-  month?: number;
+    // 本行目的：定义条目唯一 ID。
+    id: number;
+    // 本行目的：定义条目原始名称。
+    name: string;
+    // 本行目的：定义中文名称（可选）。
+    nameCn?: string;
+    // 本行目的：定义别名文本（可选）。
+    alias?: string;
+    // 本行目的：定义原始简介或原文信息（可选）。
+    origin?: string;
+    // 本行目的：定义已放送集数（可选）。
+    airedCount?: number;
+    // 本行目的：定义总集数（可选）。
+    totalCount?: number;
+    // 本行目的：定义中文简介文本（可选）。
+    summaryCn?: string;
+    // 本行目的：定义中文简介是否翻译完成标记（可选）。
+    summaryTranslated?: boolean;
+    // 本行目的：定义中文简介翻译是否失败标记（可选）。
+    summaryTranslateFailed?: boolean;
+    // 本行目的：定义题材类型列表（可选）。
+    types?: string[];
+    // 本行目的：定义地区列表（可选）。
+    regions?: string[];
+    // 本行目的：定义受众标签列表（可选）。
+    audiences?: string[];
+    // 本行目的：定义封面图片地址。
+    image: string;
+    // 本行目的：定义放送日期（可选）。
+    date?: string;
+    // 本行目的：定义评分（可选且允许 null）。
+    rating?: number | null;
+    // 本行目的：定义简介文本（可选）。
+    summary?: string;
+    // 本行目的：定义条目详情链接（可选）。
+    url?: string;
+    // 本行目的：定义所属月份（可选）。
+    month?: number;
 }
 
-/**
- * 制作人员信息。
- */
+/** 类型：StaffPerson | 用途：描述单个制作人员基础信息 | 字段：id、name、url */
+// 本行目的：导出制作人员接口。
 export interface StaffPerson {
-  id: number;
-  name: string;
-  url: string;
+    // 本行目的：定义人员唯一 ID。
+    id: number;
+    // 本行目的：定义人员名称。
+    name: string;
+    // 本行目的：定义人员详情链接。
+    url: string;
 }
 
-/**
- * 制作人员分组（按职位）。
- */
+/** 类型：StaffGroup | 用途：描述按职责分组的制作人员集合 | 字段：role、people */
+// 本行目的：导出制作组接口。
 export interface StaffGroup {
-  role: string;
-  people: StaffPerson[];
+    // 本行目的：定义职责名称。
+    role: string;
+    // 本行目的：定义该职责下的人员列表。
+    people: StaffPerson[];
 }
 
-/**
- * 角色信息（用于详情展示）。
- */
+/** 类型：CharacterLink | 用途：描述角色条目及其关联关系信息 | 字段：id、name、url、relation */
+// 本行目的：导出角色关联接口。
 export interface CharacterLink {
-  id: number;
-  name: string;
-  url: string;
-  relation?: string;
+    // 本行目的：定义角色唯一 ID。
+    id: number;
+    // 本行目的：定义角色名称。
+    name: string;
+    // 本行目的：定义角色详情链接。
+    url: string;
+    // 本行目的：定义角色关系描述（可选）。
+    relation?: string;
 }
 
-/**
- * 某个月的番剧列表。
- */
+/** 类型：SeasonMonthData | 用途：描述季度中某个月的数据聚合 | 字段：year、month、count、list */
+// 本行目的：导出季度月份数据接口。
 export interface SeasonMonthData {
-  year: number;
-  month: number;
-  count: number;
-  list: MonthAnime[];
+    // 本行目的：定义年份。
+    year: number;
+    // 本行目的：定义月份（1-12）。
+    month: number;
+    // 本行目的：定义该月条目总数。
+    count: number;
+    // 本行目的：定义该月动画条目列表。
+    list: MonthAnime[];
 }
 
-/**
- * 季度查询结果。
- */
+/** 类型：SeasonResponse | 用途：描述季度接口完整响应结构 | 字段：year、season、fetchedAt、source、months */
+// 本行目的：导出季度响应接口。
 export interface SeasonResponse {
-  year: number;
-  season: string;
-  fetchedAt: string;
-  source: string;
-  months: SeasonMonthData[];
+    // 本行目的：定义响应对应年份。
+    year: number;
+    // 本行目的：定义季度标识（如 winter/spring）。
+    season: string;
+    // 本行目的：定义数据抓取时间戳。
+    fetchedAt: string;
+    // 本行目的：定义数据来源标识。
+    source: string;
+    // 本行目的：定义季度包含的月份数据列表。
+    months: SeasonMonthData[];
 }

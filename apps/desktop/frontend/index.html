@@ -1,19 +1,22 @@
-<!-- 文档类型声明：告诉浏览器这是标准 HTML5 页面，避免怪异模式。 -->
-<!doctype html>
-<!-- 语言声明：为搜索引擎/读屏器提供中文环境信息。 -->
+<!-- 文件：index.html | 用途：前端应用宿主页面，提供根挂载点并加载入口脚本 | 关键区域：head 元信息区、#app 挂载区、main.ts 脚本入口 -->
+<!-- 声明文档类型为 HTML5，保证浏览器使用标准模式渲染页面。 -->
+<!DOCTYPE html>
+<!-- html 根节点，声明默认语言为简体中文，便于搜索引擎与辅助技术识别语言。 -->
 <html lang="zh-CN">
-  <head>
-    <!-- 字符编码：确保中文等多语言字符正确显示。 -->
-    <meta charset="UTF-8" />
-    <!-- 视口设置：让页面在不同分辨率/缩放下布局正确。 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- 页面标题：显示在窗口标题栏/任务栏/浏览器标签页。 -->
-    <title>HanamiRIP CN</title>
-  </head>
-  <body>
-    <!-- 应用挂载点：前端框架会把整个界面渲染到这个容器里。 -->
-    <div id="app"></div>
-    <!-- 入口脚本：Vite/前端框架从这里启动并加载所有模块。 -->
-    <script type="module" src="/main.ts"></script>
-  </body>
+    <!-- head 区域用于放置页面元信息与标题，不直接显示在页面正文中。 -->
+    <head>
+        <!-- 声明页面字符编码为 UTF-8，避免中文出现乱码。 -->
+        <meta charset="UTF-8" />
+        <!-- 设置视口参数，使页面在不同缩放与窗口尺寸下按预期布局。 -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!-- 设置浏览器标签页标题。 -->
+        <title>HanamiRIP CN</title>
+    </head>
+    <!-- body 区域是页面可见内容容器，Vue 应用会挂载到其中。 -->
+    <body>
+        <!-- 作为 Vue 根实例挂载点，main.ts 会把 App 组件渲染到这里。 -->
+        <div id="app"></div>
+        <!-- 通过 ESM 方式加载前端入口脚本，启动 Vue 应用。 -->
+        <script type="module" src="/main.ts"></script>
+    </body>
 </html>

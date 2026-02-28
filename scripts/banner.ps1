@@ -1,6 +1,8 @@
-# 定义一个函数：用于输出项目的 ASCII 艺术 Logo，方便脚本启动时显示品牌标识。
+# 文件：banner.ps1 | 用途：在终端输出项目 ASCII 横幅 | 关键命令：Write-Host、Here-String
+
+# 函数：Write-HanamiBanner | 输入：无 | 输出：向终端打印彩色横幅 | 可能失败：终端编码或字体不支持特殊字符时显示错位
 function Write-HanamiBanner {
-  # 使用 here-string 保存多行 ASCII 文本，避免逐行拼接。
+  # 变量：banner | 含义：完整 ASCII 横幅文本内容 | 类型：String（Here-String） | 作用域：函数内
     $banner = @'
                ________________                                 ___           ___           ___           ___           ___                       ___                       ___
               |                |_____    __                    /\__\         /\  \         /\__\         /\  \         /\__\          ___        /\  \          ___        /\  \
@@ -15,9 +17,9 @@ function Write-HanamiBanner {
 `b,  ,P  `b,  ,P                                               \/__/         \/__/         \/__/         \/__/         \/__/                     \|__|
   """`     """`
 '@
-    # 输出到控制台，并设置为洋红色，提升可见度。
+    # 使用洋红色输出横幅，增强启动辨识度。
     Write-Host $banner -ForegroundColor Magenta
 }
 
-  # 脚本入口：直接调用函数，打印 Banner。
-  Write-HanamiBanner
+# 执行横幅输出主函数。
+Write-HanamiBanner
